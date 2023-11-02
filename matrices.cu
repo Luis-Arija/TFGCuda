@@ -1,20 +1,39 @@
 #include <stdio.h>
 #include <cuda.h>
+#include <stdio.h>
+#include <time.h>
+#include <Windows.h>
 #define N 16
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
 
 
-//Funciones Kernel
+/*
+Funciones Kernel : Las funciones que trabajan con datos dentro de la GPU.
+Para invocar una función Kernel, se escribe lo siguiente: Nombre_Función << <NBloques, TamañoBloque >> > (Arg1, Arg2,..., ArgN);
+Así se creará un número de threads paralelos igual a NBloques*TamañoBloque, y cada thread realizará la función Nombre_Funcion.   
+Los argumentos a los que tienen acceso son en todo momento iguales, pero el resultado será distinto dependiendo del ID de dicho thread. 
+El ID del thread se suele calcular al comienzo de la función. Este es igual al ID de bloque del thread (BlockId) por el tamaño de los bloques  más el ID del thread dentro del bloque
+Matemáticamente: Id= BlockId*BlockSize+ThreadId; Su valor está dentro de {0, (NBloques*TamañoBloques)-1}
+
+Como los Kernel tienen acceso a esos datos, es lógico crear funciones que trabajen en base a ellos, y en cierto modo dependan de ellos. 
+Se explicará los requisitos de invocación para cada función. 
+*/
+
+//Add Ints es una simple suma. Se usa <<<1,1>>> porque hacerlo más veces no añade nada. 
 __global__ void AddInts(int* out, int* a, int* b) {
 	out[0] = a[0] + b[0];
 }
 
+//Add Vector es una suma de vectores representados como arrays. Usa <<<1, ArraySize>>>, y cada thread calcula el valor de Out en su id. 
 __global__ void AddVector(int* out, int* a, int* b) {
 	int nThread = threadIdx.x;
 	out[nThread] = a[nThread] + b[nThread];
 }
 
-//Es una versión más completa de AddVector
+//AddMatrix es una versión más completa de AddVector. Suma dos matrices representadas como arrays. 
+//Teóricamente lo que hace esta función lo puede hacer AddVector si el tamaño del vector está por debajo de 1029. (Nmax de threads es 1028)
+//La función se invoca con <<<NFilas,Ncolumnas>>>
+//Calcula el valor de Out en [IdBloque][IdThread], el cual para una matriz representada como array es [IdBloque*TamañoBloque+IdThread], y lo obtiene sumando el valor de a y b en ID
 __global__ void AddMatrix(int* out, int* a, int* b) {
 	int nThread = threadIdx.x;
 	int nBlock = blockIdx.x;
@@ -22,6 +41,13 @@ __global__ void AddMatrix(int* out, int* a, int* b) {
 	int id = nBlock * blockDimension + nThread;
 	out[id] = a[id] + b[id];
 }
+
+//Mul Matrix toma dos matrices representadas como arrays y te devuelve otro array que representa el resultado de la multiplicación.
+//En este caso, dado que toda multiplicacion de matrices funciona tal que A[X][Y]*B[Y][Z]= C[X][Z], la función se invoca con <<<NFilasdeA,NColumnasdeB>>>
+//Con IdBloque e IdThread sabemos a que fila y columna pertenece el valor de Out, y como calcularlo. 
+//Se recorre esa Fila de A y Columna de B, las cuales tienen el mismo tamaño (nColumns1), y se calcula la suma de las multiplicaciones de los valores. 
+//Como A y B son vectores, para recorrer la fila de A se encuentra la "posición 0" de dicha fila y se le suma 1 por cada iteración para obtener el siguiente valor. 
+//Para recorrer la columna de B, se encuentra la "posición 0" de dicha columna, y se le suma el tamaño de la fila de B para obtener el siguiente valor. 
 
 __global__ void MulMatrix(int* out, int* a, int* b, int nColumns1) {
 	int nBlock = blockIdx.x; //Fila
@@ -36,6 +62,9 @@ __global__ void MulMatrix(int* out, int* a, int* b, int nColumns1) {
 	out[id] = sumatorio;
 }
 
+
+//MoveMatrix es un Kernel de apoyo que uso para copiar una matriz a otra. No revisa tamaños, dado que trabaja con arrays. Debido a como está hecha, funciona con cualquier <<<X,Y>>> 
+//Siempre que X*Y sea igual al número de elementos de la matriz 
 __global__ void MoveMatrix(int* to, int* from) {
 	int nBlock = blockIdx.x; //Fila
 	int nThread = threadIdx.x; //Columna
@@ -187,7 +216,7 @@ void MultiplicacionMatricial(int matriz1[], int matriz2[], int size1, int size2,
 			//Pasar información al GPU
 			cudaMemcpy(d_v1, matriz1, sizeof(int) * size1, cudaMemcpyHostToDevice);
 			cudaMemcpy(d_v2, matriz2, sizeof(int) * size2, cudaMemcpyHostToDevice);
-
+			//Sleep(2000);
 			//Invocar funcion de multiplicacion
 			MulMatrix << <nRows1, nColumns2 >> > (d_vOut, d_v1, d_v2, nColumns1);
 
@@ -283,6 +312,11 @@ void PotenciaMatricial(int matriz[], int size, int nRows, int nColumns, int nPot
 
 int main() {
 
+	// Prepare
+	cudaEvent_t start, stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	
 	//SumaSimple(3, 4);
 
 	//Suma vectorial
@@ -302,8 +336,20 @@ int main() {
 	SumaMatricial(vector1, vector2, NELEMS(vector1), NELEMS(vector2), 4, 4, false);
 	MultiplicacionMatricial(vector1, vector2, NELEMS(vector1), NELEMS(vector2), 4, 4, 4, 4, false);
 
-	PotenciaMatricial(vector1, NELEMS(vector1), 4, 4, 2, true);
-
+	
+	// Start record
+	cudaEventRecord(start, 0);
+	// Do something on GPU
+	PotenciaMatricial(vector1, NELEMS(vector1), 4, 4, 3, true);
+	// Stop event
+	cudaEventRecord(stop, 0);
+	cudaEventSynchronize(stop);
+	float elapsedTime;
+	cudaEventElapsedTime(&elapsedTime, start, stop); // that's our time!
+	// Clean up:
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
+	printf("Time Elapsed: %f", elapsedTime);
 
 	return 0;
 }
