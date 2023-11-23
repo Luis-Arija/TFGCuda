@@ -23,14 +23,14 @@
 
 
 
-//tamaño cuerpo = 36
+//tamaño cuerpo =
 struct cuerpo {
 	float pos[2];	//En metros
 	float vel[2];	//En Metros/Segundo
 	float masa;		//En KG
 	float acel[2];	//En Metros/Segundo^2 = F/M
-	float fueTotal[2];	
-	float fueVarias[N][2]; //En Newtons (N) = G* (m1*m2) / d^2
+	float fueTotal[2];
+	float fueVarias[N][2]; //En Newtons (N) = G* (m1*m2) / d^2 
 };
 
 //Tamaño universo = N*36 = N*Tamaño_Cuerpo
@@ -69,6 +69,7 @@ __global__ void newVariousForce(universo* uni) {
 	int nThread = threadIdx.x;
 
 	if (nBlock < nThread) {
+		
 		float posX1 = uni[0].cuerpos[nBlock].pos[0];
 		float posY1 = uni[0].cuerpos[nBlock].pos[1];
 		float posX2 = uni[0].cuerpos[nThread].pos[0];
@@ -81,8 +82,8 @@ __global__ void newVariousForce(universo* uni) {
 		float difY = posY1 - posY2;
 
 		float disTotal = sqrt(difX * difX + difY * difY);
-		
-		float Div = 100000000000*disTotal;
+
+		float Div = 100000000000 * disTotal * disTotal;
 		float F = 6.67428 * M1 * M2 / Div;
 		
 		float cos = difX / disTotal;
