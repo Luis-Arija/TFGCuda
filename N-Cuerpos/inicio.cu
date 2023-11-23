@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <Windows.h>
-#define N 2 //Número de cuerpos en el universo
+#define N 5 //Número de cuerpos en el universo
 #define TIMELAPSE 1 //Número de segundos que pasan entre instantes
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
 
@@ -162,7 +162,7 @@ __global__ void newSpeed(universo* uni) {
 }
 
 __global__ void printUni(universo* uni) {
-	printf("Pos X	Pos Y	VelX	VelY\n");
+	printf("Pos X		Pos Y		VelX		VelY\n");
 	for (int i = 0; i < N; i++) {
 		printf("%f, %f,", uni[0].cuerpos[i].pos[0], uni[0].cuerpos[i].pos[1]);
 		printf("	%f, %f\n", uni[0].cuerpos[i].vel[0], uni[0].cuerpos[i].vel[1]);
@@ -175,7 +175,7 @@ void iterar_universo(universo uni, int tiempo, bool print) {
 	cudaMemcpy(d_uni, &uni, sizeof(universo), cudaMemcpyHostToDevice);
 	
 	force0 << <1, 1 >> > (d_uni);
-	printf("Iteracion %d: \n", (i + 1));
+	printf("Iteracion 0: \n");
 	printUni << <1, 1 >> > (d_uni);
 	for (int i = 0; i <= tiempo; i = i + TIMELAPSE) {
 	
@@ -202,13 +202,18 @@ int main() {
 	struct cuerpo mundo1;
 	float posicion[] = { 0,0 };
 	float posicion2[] = { 10,10 };
-	float velocidad[] = { 2,3 };
+	float posicion3[] = { 10,-10 };
+	float posicion4[] = { -10,-10 };
+	float posicion5[] = { -10,10 };
+	float velocidad[] = { 0,0 };
 	float masa = 1000000000000;
 
 	struct universo uni;
 	uni.cuerpos[0] = inicializar(mundo1, posicion, velocidad, masa);
 	uni.cuerpos[1] = inicializar(mundo1, posicion2, velocidad, masa);
-
+	uni.cuerpos[2] = inicializar(mundo1, posicion3, velocidad, masa);
+	uni.cuerpos[3] = inicializar(mundo1, posicion4, velocidad, masa);
+	uni.cuerpos[4] = inicializar(mundo1, posicion5, velocidad, masa);
 	iterar_universo(uni, 20, true);
 
 	return 0;
