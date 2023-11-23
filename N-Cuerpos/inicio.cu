@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <Windows.h>
-#define N 5 //Número de cuerpos en el universo
+#define N 2 //Número de cuerpos en el universo
 #define TIMELAPSE 1 //Número de segundos que pasan entre instantes
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
 
@@ -29,7 +29,8 @@ struct cuerpo {
 	float vel[2];	//En Metros/Segundo
 	float masa;		//En KG
 	float acel[2];	//En Metros/Segundo^2 = F/M
-	float fue[2];	//En Newtons (N) = G* (m1*m2) / d^2
+	float fueTotal[2];	
+	float fueVarias[N][2]; //En Newtons (N) = G* (m1*m2) / d^2
 };
 
 //Tamaño universo = N*36 = N*Tamaño_Cuerpo
@@ -44,10 +45,6 @@ cuerpo inicializar(cuerpo a, float posicion[2], float velocidad[2], float masa) 
 	a.vel[0] = velocidad[0];
 	a.vel[1] = velocidad[1];
 	a.masa = masa;
-	a.acel[0] = 0; 
-	a.acel[1] = 0;
-	a.fue[0] = 0;
-	a.fue[1] = 0;
 	return a;
 }
 
@@ -59,6 +56,64 @@ int nCalculos(int ncuerpos) {
 	return sumatorio;
 }
 
+__global__ void force0(universo* uni) {
+	for (int i = 0; i < N; i++) {
+		uni[0].cuerpos[i].fueVarias[i][0] = 0;
+		uni[0].cuerpos[i].fueVarias[i][1] = 0;
+	}
+}
+
+__global__ void newVariousForce(universo* uni) {
+	//Obtener bloque y thread
+	int nBlock = blockIdx.x;
+	int nThread = threadIdx.x;
+
+	if (nBlock < nThread) {
+		float posX1 = uni[0].cuerpos[nBlock].pos[0];
+		float posY1 = uni[0].cuerpos[nBlock].pos[1];
+		float posX2 = uni[0].cuerpos[nThread].pos[0];
+		float posY2 = uni[0].cuerpos[nThread].pos[1];
+		
+		float M1 = uni[0].cuerpos[nBlock].masa;
+		float M2 = uni[0].cuerpos[nBlock].masa;
+		
+		float difX = posX1 - posX2;
+		float difY = posY1 - posY2;
+
+		float disTotal = sqrt(difX * difX + difY * difY);
+		
+		float Div = 100000000000*disTotal;
+		float F = 6.67428 * M1 * M2 / Div;
+		
+		float cos = difX / disTotal;
+		float sen = difY / disTotal;
+
+		float Fx = F * cos;
+		float Fy = F * sen;
+		
+		uni[0].cuerpos[nBlock].fueVarias[nThread][0] = -Fx;
+		uni[0].cuerpos[nBlock].fueVarias[nThread][1] = -Fy;
+
+		uni[0].cuerpos[nThread].fueVarias[nBlock][0] = Fx;
+		uni[0].cuerpos[nThread].fueVarias[nBlock][1] = Fy;
+
+	}
+
+}
+
+//Tantos bloques como objetos, un thread por dimension. El codigo no es óptimo en pos de ser representativo. 
+__global__ void newForce(universo* uni) {
+	//Obtener bloque y thread
+	int nBlock = blockIdx.x;
+	int nThread = threadIdx.x;
+	float sum = 0;
+	for (int i = 0; i < N; i++) {
+		sum += uni[0].cuerpos[nBlock].fueVarias[i][nThread];
+	}
+	uni[0].cuerpos[nBlock].fueTotal[nThread] = sum;
+
+}
+
 //Tantos bloques como objetos, un thread por dimension. El codigo no es óptimo en pos de ser representativo. 
 __global__ void newAcel(universo* uni) {
 
@@ -68,11 +123,10 @@ __global__ void newAcel(universo* uni) {
 
 	//Obtener Masa y Fuerza actual de esta dimension
 	float masa_actual = uni[0].cuerpos[nBlock].masa;
-	float fue_actual = uni[0].cuerpos[nBlock].fue[nThread];
-
+	float fue_actual = uni[0].cuerpos[nBlock].fueTotal[nThread];
 	//Calcular la nueva Aceleración y meterla en el universo
 	float acel_nueva = fue_actual/masa_actual;
-	uni[0].cuerpos[nBlock].pos[nThread] = acel_nueva;
+	uni[0].cuerpos[nBlock].acel[nThread] = acel_nueva;
 }
 
 //Tantos bloques como objetos, un thread por dimension. El codigo no es óptimo en pos de ser representativo. 
@@ -81,14 +135,12 @@ __global__ void newPosition(universo* uni) {
 	//Obtener bloque y thread
 	int nBlock = blockIdx.x;
 	int nThread = threadIdx.x;
-	
 	//Obtener Posicion y Velocidad actual de esta dimension
 	float pos_actual = uni[0].cuerpos[nBlock].pos[nThread];
 	float vel_actual = uni[0].cuerpos[nBlock].vel[nThread];
 
 	//Calcular la nueva Posición y meterla en el universo
 	float pos_nueva = pos_actual + vel_actual * TIMELAPSE;
-	printf("Posicion nueva: %f\n", pos_nueva);
 	uni[0].cuerpos[nBlock].pos[nThread] = pos_nueva;
 }
 
@@ -110,30 +162,36 @@ __global__ void newSpeed(universo* uni) {
 }
 
 __global__ void printUni(universo* uni) {
-	printf("Posicion = %f, %f\n", uni[0].cuerpos[0].pos[0], uni[0].cuerpos[0].pos[1]);
-	printf("Velocidad = %f, %f\n", uni[0].cuerpos[0].vel[0], uni[0].cuerpos[0].vel[1]);
+	printf("Pos X	Pos Y	VelX	VelY\n");
+	for (int i = 0; i < N; i++) {
+		printf("%f, %f,", uni[0].cuerpos[i].pos[0], uni[0].cuerpos[i].pos[1]);
+		printf("	%f, %f\n", uni[0].cuerpos[i].vel[0], uni[0].cuerpos[i].vel[1]);
+	}
 }
 
 void iterar_universo(universo uni, int tiempo, bool print) {
 	universo* d_uni;
 	cudaMalloc(&d_uni, sizeof(universo));
-	
 	cudaMemcpy(d_uni, &uni, sizeof(universo), cudaMemcpyHostToDevice);
-	//Print situación inicial
+	
+	force0 << <1, 1 >> > (d_uni);
+	printf("Iteracion %d: \n", (i + 1));
 	printUni << <1, 1 >> > (d_uni);
 	for (int i = 0; i <= tiempo; i = i + TIMELAPSE) {
 	
+		printf("Iteracion %d: \n", (i+1));
 		//Obtener fuerzas
-
-
+		newVariousForce << <N, N >> > (d_uni);
+		newForce << <N, 2 >> > (d_uni);
 		newAcel << <N, 2 >> > (d_uni);
 		newPosition << <N, 2 >> > (d_uni);
 		newSpeed << <N, 2 >> > (d_uni);
-
 		//Print situación T=i+Timelapse
+
 		printUni << <1, 1 >> > (d_uni);
+
+		cudaDeviceSynchronize();
 	}
-	
 	cudaFree(d_uni);
 }
 
@@ -143,16 +201,15 @@ int main() {
 	
 	struct cuerpo mundo1;
 	float posicion[] = { 0,0 };
-	float velocidad[] = { 1,1 };
-	float masa = 10;
+	float posicion2[] = { 10,10 };
+	float velocidad[] = { 2,3 };
+	float masa = 1000000000000;
 
-	mundo1 = inicializar(mundo1, posicion, velocidad, masa);
-
-	struct universo uni; 
+	struct universo uni;
 	uni.cuerpos[0] = inicializar(mundo1, posicion, velocidad, masa);
-	uni.cuerpos[1] = inicializar(mundo1, posicion, velocidad, masa);
+	uni.cuerpos[1] = inicializar(mundo1, posicion2, velocidad, masa);
 
-	iterar_universo(uni, 2, true);
+	iterar_universo(uni, 20, true);
 
 	return 0;
 }
