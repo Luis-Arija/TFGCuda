@@ -113,7 +113,7 @@ void SumaVectorial(int vector1[], int vector2[], int size1, int size2, bool want
 		int* vOut = (int*)malloc(sizeof(int) * size1);
 		int* d_v1, * d_v2, * d_vOut;
 
-		//Hacer espacio en el GPU
+		//Hacer espacio en la GPU
 		cudaMalloc((void**)&d_v1, sizeof(int) * size1);
 		cudaMalloc((void**)&d_v2, sizeof(int) * size1);
 		cudaMalloc((void**)&d_vOut, sizeof(int) * size1);
@@ -127,6 +127,11 @@ void SumaVectorial(int vector1[], int vector2[], int size1, int size2, bool want
 
 		//Pasar información resultante de vuelta
 		cudaMemcpy(vOut, d_vOut, sizeof(int) * size1, cudaMemcpyDeviceToHost);
+		
+		//Liberar el espacio usado en la GPU
+		cudaFree(d_v1);
+		cudaFree(d_v2);
+		cudaFree(d_vOut);
 
 		if (wantPrint) {
 			//Print resultado
@@ -136,10 +141,7 @@ void SumaVectorial(int vector1[], int vector2[], int size1, int size2, bool want
 		}
 		
 
-		//liberar el espacio usado en el GPU
-		cudaFree(d_v1);
-		cudaFree(d_v2);
-		cudaFree(d_vOut);
+		
 	}
 	else {
 		printf("Mismatch in vector sizes");

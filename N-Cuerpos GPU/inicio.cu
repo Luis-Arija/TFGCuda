@@ -6,6 +6,7 @@
 #define N 5 //Número de cuerpos en el universo
 #define TIMELAPSE 1 //Número de segundos que pasan entre instantes
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
+#define G 6.67428/100000000000
 
 
 /*	Orden:
@@ -76,7 +77,7 @@ __global__ void newVariousForce(universo* uni) {
 		float posY2 = uni[0].cuerpos[nThread].pos[1];
 		
 		float M1 = uni[0].cuerpos[nBlock].masa;
-		float M2 = uni[0].cuerpos[nBlock].masa;
+		float M2 = uni[0].cuerpos[nThread].masa;
 		
 		float difX = posX1 - posX2;
 		float difY = posY1 - posY2;
