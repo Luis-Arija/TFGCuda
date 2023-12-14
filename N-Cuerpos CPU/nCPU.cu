@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <Windows.h>
-#define N 2 //Número de cuerpos en el universo
+#define N 5 //Número de cuerpos en el universo
 #define TIMELAPSE 1 //Número de segundos que pasan entre instantes
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
 #define G 6.67428/100000000000
@@ -164,7 +164,40 @@ void printCuerpos(universo* uni, int iteracion, bool position, bool speed) {
 		if (speed) {
 			printf("--Speed:\n	X:%f\n	Y:%f\n\n", cuerpoActual.vel[0], cuerpoActual.vel[1]);
 		}
+
 	}
+}
+
+void writeData(universo* uni, int iteracion, int nIteracionesTotales) {
+	cuerpo cuerpoActual;
+	float posX;
+	float posY;
+	FILE* archivo;
+	// Nombre del archivo
+	const char* nombreArchivo = "archivo.txt";
+	if (iteracion == 0) {
+		// Abrir el archivo en modo escritura ("w")
+		archivo = fopen(nombreArchivo, "w");
+		fprintf(archivo, "%d;%d", nIteracionesTotales, N);
+	} else {
+		// Abrir el archivo en modo adición ("a")
+		archivo = fopen(nombreArchivo, "a");
+	}
+
+	for (int i = 0; i < N; i++) {
+		//Obtener datos
+		cuerpoActual = uni[0].cuerpos[i];
+		posX = cuerpoActual.pos[0];
+		posY = cuerpoActual.pos[1];
+
+		fprintf(archivo, "\n%d;%d;%f;%f", iteracion, i, posX, posY); 
+		//fprintf(archivo, "\n%f;%f", posX, posY);
+		//Imprimir en formato X;Y
+	}
+
+	fclose(archivo);
+
+
 }
 
 void iterateUniverse(universo* uni, int nSegundos, bool print) {
@@ -174,6 +207,7 @@ void iterateUniverse(universo* uni, int nSegundos, bool print) {
 	while (timeLeft >= TIMELAPSE) {
 		if (print) {
 			printCuerpos(uni, nIteration, true, true);
+			writeData(uni, nIteration, nIteracionesTotales+1);
 		}
 		newForces(uni);
 		newAcel(uni);
@@ -184,6 +218,7 @@ void iterateUniverse(universo* uni, int nSegundos, bool print) {
 	}
 	if (print) {
 		printCuerpos(uni, nIteration, true, true);
+		writeData(uni, nIteration, nIteracionesTotales+1);
 	}
 }
 
@@ -196,18 +231,18 @@ int main() {
 	
 	float posicion[] = { 0,0 };
 	float posicion2[] = { 10,10 };
-	//float posicion3[] = { 10,-10 };
-	//float posicion4[] = { -10,-10 };
-	//float posicion5[] = { -10,10 };
+	float posicion3[] = { 10,-10 };
+	float posicion4[] = { -10,-10 };
+	float posicion5[] = { -10,10 };
 	float velocidad[] = { 0, 0 };
 	float masa = 1000000000000;
 
 	uni[0].cuerpos[0] = inicializar(mundo, posicion, velocidad, masa);
 	uni[0].cuerpos[1] = inicializar(mundo, posicion2, velocidad, masa);
-	//uni[0].cuerpos[2] = inicializar(mundo, posicion3, velocidad, masa);
-	//uni[0].cuerpos[3] = inicializar(mundo, posicion4, velocidad, masa);
-	//uni[0].cuerpos[4] = inicializar(mundo, posicion5, velocidad, masa);
-	iterateUniverse(uni, 20, true);
+	uni[0].cuerpos[2] = inicializar(mundo, posicion3, velocidad, masa);
+	uni[0].cuerpos[3] = inicializar(mundo, posicion4, velocidad, masa);
+	uni[0].cuerpos[4] = inicializar(mundo, posicion5, velocidad, masa);
+	iterateUniverse(uni, 200, true);
 
 	return 0;
 }
