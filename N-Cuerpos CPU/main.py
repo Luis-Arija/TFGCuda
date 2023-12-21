@@ -38,8 +38,8 @@ fig, ax = plt.subplots()
 sc = ax.scatter([], [], marker='o', color='b', s = 20);
 
 # Ajusta los límites del gráfico
-ax.set_xlim(-50000, 50000)  # Ajusta según sea necesario
-ax.set_ylim(-50000, 50000)  # Ajusta según sea necesario
+ax.set_xlim(-100000000000, 100000000000)  # Ajusta según sea necesario
+ax.set_ylim(-100000000000, 100000000000)  # Ajusta según sea necesario
 
 # Función de inicialización
 def init():
