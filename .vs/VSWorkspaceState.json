@@ -2,8 +2,9 @@
   "ExpandedNodes": [
     "",
     "\\CuaTreeCPU",
-    "\\N-Cuerpos CPU"
+    "\\N-Cuerpos CPU",
+    "\\N-Cuerpos GPU"
   ],
-  "SelectedNode": "\\CuaTreeCPU\\cuaTreeCPU.cu",
+  "SelectedNode": "\\N-Cuerpos CPU\\main.py",
   "PreviewInSolutionExplorer": false
 }
