@@ -2,7 +2,7 @@
 #include <cuda.h>
 #include <time.h>
 #include <Windows.h>
-#define N 100 //Número de cuerpos en el universo
+#define N 1000 //Número de cuerpos en el universo
 #define TIMELAPSE 86400 //Número de segundos que pasan entre instantes
 #define G 6.67428/100000000000
 
