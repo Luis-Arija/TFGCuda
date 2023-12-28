@@ -3,16 +3,17 @@
 #include <time.h>
 #include <Windows.h>
 #define N 10//Número de cuerpos en el universo. MAXIMO 14000
-#define nNiveles 3 //Número de niveles tendrán una dim de MAXDIM/pow(2,nNiveles)
+#define nNiveles 1 //Número de niveles. Máximo 9 por tamaño int
+//tendrán una dim de MAXDIM/pow(2,nNiveles)
+#define CLEANTREEITERATION 2
 
 #define TIMELAPSE 86400 //Número de segundos que pasan entre instantes
 #define G 6.67428/100000000000
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
-#define MAXDIM 100000 // m
-#define MAXSPEED 60000 // m/s
-#define MAXMASS 61000000
-#define MINMASS 1000000
-#define CLEANTREEITERATION 28
+#define MAXDIM 15*pow(10, 8)
+#define MAXSPEED 30000 // m/s
+#define MAXMASS 6*pow(10,24)
+#define MINMASS 1*pow(10,23)
 #define randnum(min, max) \
         ((rand() % (int)(((max) + 1) - (min))) + (min))
 
@@ -29,18 +30,20 @@ struct cuerpo {
 
 struct cuaTree {
 	bool tieneRamas = false;
-	int nivelTree; 
-	int cuadrante; 
-	int path; 
+	int nivelTree=0; 
+	int cuadrante=0; 
+	int path=0; 
+	int idFila=-1;
+	int idColumna=-1;
 	int* cuerpos;
-	int nCuerpos;
-	float masaTotal;
-	float centroMasasX;
-	float centroMasasY;
-	float maxX;
-	float maxY;
-	float minX;
-	float minY;
+	int nCuerpos = 0;
+	float masaTotal = 0.0;
+	float centroMasasX = 0.0;
+	float centroMasasY = 0.0;
+	float maxX = 0.0;
+	float maxY = 0.0;
+	float minX = 0.0;
+	float minY = 0.0;
 	struct cuaTree *rama1 = NULL;	//	1	2
 	struct cuaTree *rama2 = NULL;	//	3	4
 	struct cuaTree *rama3 = NULL;
@@ -326,13 +329,17 @@ void printTree(cuaTree* raiz) {
 	}
 	else {
 		int path = raiz->path;
-		int nFila = pathAPunteroFila(path);
-		int nColumna = pathAPunteroColumna(path);
+		int nFila = raiz->idFila;
+		int nColumna = raiz->idColumna;
 		printf("-----------IMPRESION DE TREE------------\n\n");
 		printf("Nivel del Tree: %d\n", raiz->nivelTree);
 		printf("Cuadrante del Tree: %d\n", raiz->cuadrante);
 		printf("Path del Tree: %d\n", path);
-		printf("Posicion verdadera del Tree: (%d,%d)", nFila, nColumna);
+		if (raiz->nivelTree == nNiveles) {
+			printf("Este tree es un tree final\n");
+			printf("Posicion verdadera del Tree: (%d,%d)\n", (nFila + 1), (nColumna + 1));
+		}
+		
 		printf("\nNumero de cuerpos del Tree: %d\n", raiz->nCuerpos);
 		printf("Id's de Cuerpos del Tree: ");
 		for (int i = 0; i < raiz->nCuerpos - 1; i++) {
@@ -389,6 +396,22 @@ void printTree(cuaTree* raiz) {
 	}
 }
 
+void printPunTree(universo* uni) {
+	int nFilas = pow(2, nNiveles);
+	for (int i = 0; i < nFilas; i++) {
+		for (int j = 0; j < nFilas; j++) {
+			if (uni->punTreeMatriz[i][j] != NULL) {
+				printTree(uni->punTreeMatriz[i][j]);
+			}
+			else {
+				printf("\n-----------PRINT TREE---------\n");
+				printf("La rama en la posicion (%d,%d) esta vacia\n", (i + 1), (j + 1));
+			}
+
+		}
+	}
+
+}
 //HASTA AQUI ES REVISABLE SI HICIERA FALTA
 
 /*
@@ -431,8 +454,6 @@ void raizTree(universo* uni, cuaTree* raiz) {
 
 }
 
-
-
 int aQueCuadrante(cuerpo a, cuaTree raiz) { 
 	//	1	2
 	//	3	4
@@ -468,7 +489,7 @@ int aQueCuadrante(cuerpo a, cuaTree raiz) {
 }
 
 //Siempre que rellene un Tree, sera la primera vez que se cree.
-cuaTree* rellenaTree(cuaTree* raiz, int cuadrante, int nCuerpos, int* cuerpos, float masaTotal, float maxX, float maxY, float minX, float minY) {
+cuaTree* rellenaTree(universo* uni, cuaTree* raiz, int cuadrante, int nCuerpos, int* cuerpos, float masaTotal, float maxX, float maxY, float minX, float minY) {
 
 	//Hago espacio para el cuatree
 	struct cuaTree* ramaN = (cuaTree*)malloc(sizeof(struct cuaTree));
@@ -491,6 +512,12 @@ cuaTree* rellenaTree(cuaTree* raiz, int cuadrante, int nCuerpos, int* cuerpos, f
 	ramaN->maxY = maxY;
 	ramaN->minY = minY;
 	ramaN->padre = raiz;
+
+	if (ramaN->nivelTree==nNiveles) {
+		ramaN->idFila = pathAPunteroFila(ramaN->path);
+		ramaN->idColumna = pathAPunteroColumna(ramaN->path);
+		uni->punTreeMatriz[ramaN->idFila][ramaN->idColumna] = ramaN;
+	}
 	
 	return ramaN;
 
@@ -498,24 +525,29 @@ cuaTree* rellenaTree(cuaTree* raiz, int cuadrante, int nCuerpos, int* cuerpos, f
 
 //libera todos los mallocs del arbol y de sus hijos
 void liberaTree(cuaTree* raiz) {
-	cuaTree este = raiz[0];
-	free(este.cuerpos);
-	if (este.rama1 != NULL) {//Este arbol tenia un hijo en rama 1. 
-		liberaTree(este.rama1); //Se invoca esta funcion para liberar el espacio de los punteros de su hijo
-		free(este.rama1); //liberas al propio hijo
+	free(raiz->cuerpos);
+	raiz->nCuerpos = 0;
+	if (raiz->rama1 != NULL) {//Este arbol tenia un hijo en rama 1. 
+		liberaTree(raiz->rama1); //Se invoca esta funcion para liberar el espacio de los punteros de su hijo
+		free(raiz->rama1); //liberas al propio hijo
+		raiz->rama1 = NULL;
 	}
-	if (este.rama2 != NULL) { //Lo mismo con la rama 2, 3 y 4
-		liberaTree(este.rama2);
-		free(este.rama2);
+	if (raiz->rama2 != NULL) { //Lo mismo con la rama 2, 3 y 4
+		liberaTree(raiz->rama2);
+		free(raiz->rama2);
+		raiz->rama2 = NULL;
 	}
-	if (este.rama3 != NULL) {
-		liberaTree(este.rama3);
-		free(este.rama3);
+	if (raiz->rama3 != NULL) {
+		liberaTree(raiz->rama3);
+		free(raiz->rama3);
+		raiz->rama3 = NULL;
 	}
-	if (este.rama4 != NULL) {
-		liberaTree(este.rama4);
-		free(este.rama4);
+	if (raiz->rama4 != NULL) {
+		liberaTree(raiz->rama4);
+		free(raiz->rama4);
+		raiz->rama4 = NULL;
 	}
+	raiz->tieneRamas = false;
 }
 
 void ramificaTree(cuaTree* raiz, universo* uni) {
@@ -523,7 +555,6 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 	//printf("Nivel: %d	Path: %d\n", raiz[0].nivelTree, raiz[0].path);
 	raiz[0].tieneRamas = true;
 	cuaTree* rama;
-	int path;
 	bool ramificarMas = (raiz[0].nivelTree+1 < nNiveles);//Es el nivel que creo ahora el nivel más bajo?
 	
 	float minX = raiz[0].minX;
@@ -591,16 +622,13 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 	//Rama 1
 	if (nCuerposRama1 > 0) {
 		//Si tiene cuerpos, se crea y rellena la rama. 
-		rama = rellenaTree(raiz, 1, nCuerposRama1, cuerpos1, masaTotal1, midX, maxY, minX, midY);
+		rama = rellenaTree(uni, raiz, 1, nCuerposRama1, cuerpos1, masaTotal1, midX, maxY, minX, midY);
 		raiz[0].rama1 = rama;
 		//Si no es un nivel suficiente, se ramifica más
 		if (ramificarMas) {
 			ramificaTree(rama, uni);
 		}
-		else {//Si es de un nivel suficiente, se le asigna a la matriz de punteros de tree del universo
-			path = rama->path;
-			uni->punTreeMatriz[pathAPunteroFila(path)][pathAPunteroColumna(path)] = rama;
-		}
+
 		//Se obtiene el centro de masas
 		rama->centroMasasX = centroMasasX(rama, uni);
 		rama->centroMasasY = centroMasasY(rama, uni);
@@ -612,16 +640,13 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 	//Rama 2  
 	if (nCuerposRama2 > 0) {
 		//Si tiene cuerpos, se crea y rellena la rama. 
-		rama = rellenaTree(raiz, 2, nCuerposRama2, cuerpos2, masaTotal2, maxX, maxY, midX, midY);
+		rama = rellenaTree(uni, raiz, 2, nCuerposRama2, cuerpos2, masaTotal2, maxX, maxY, midX, midY);
 		raiz[0].rama2 = rama;
 		//Si no es un nivel suficiente, se ramifica más
 		if (ramificarMas) {
 			ramificaTree(rama, uni);
 		}
-		else {
-			path = rama->path;
-			uni->punTreeMatriz[pathAPunteroFila(path)][pathAPunteroColumna(path)] = rama;
-		}
+
 		//Se obtiene el centro de masas
 		rama->centroMasasX = centroMasasX(rama, uni);
 		rama->centroMasasY = centroMasasY(rama, uni);
@@ -632,16 +657,13 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 	//Rama 3 
 	if (nCuerposRama3 > 0) {
 		//Si tiene cuerpos, se crea y rellena la rama. 
-		rama = rellenaTree(raiz, 3, nCuerposRama3, cuerpos3, masaTotal3, midX, midY, minX, minY);
+		rama = rellenaTree(uni, raiz, 3, nCuerposRama3, cuerpos3, masaTotal3, midX, midY, minX, minY);
 		raiz[0].rama3 = rama;
 		//Si no es un nivel suficiente, se ramifica más
 		if (ramificarMas) {
 			ramificaTree(rama, uni);
 		}
-		else {
-			path = rama->path;
-			uni->punTreeMatriz[pathAPunteroFila(path)][pathAPunteroColumna(path)] = rama;
-		}
+
 		//Se obtiene el centro de masas
 		rama->centroMasasX = centroMasasX(rama, uni);
 		rama->centroMasasY = centroMasasY(rama, uni);
@@ -652,16 +674,13 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 	//Rama 4 
 	if (nCuerposRama4 > 0) {
 		//Si tiene cuerpos, se crea y rellena la rama. 
-		rama = rellenaTree(raiz, 4, nCuerposRama4, cuerpos4, masaTotal4, maxX, midY, midX, minY);
+		rama = rellenaTree(uni, raiz, 4, nCuerposRama4, cuerpos4, masaTotal4, maxX, midY, midX, minY);
 		raiz[0].rama4 = rama;
 		//Si no es un nivel suficiente, se ramifica más
 		if (ramificarMas) {
 			ramificaTree(rama, uni);
 		}
-		else {
-			path = rama->path;
-			uni->punTreeMatriz[pathAPunteroFila(path)][pathAPunteroColumna(path)] = rama;
-		}
+
 		//Se obtiene el centro de masas
 		rama->centroMasasX = centroMasasX(rama, uni);
 		rama->centroMasasY = centroMasasY(rama, uni);
@@ -674,7 +693,7 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 
 //Calculos de fuerzas y demás.
 void forceIterate(universo* uni, int idCuerpo1, int idCuerpo2) {
-
+	//Force iterate toma los ids de los cuerpos y los calcula los unos con los otros
 	cuerpo cuerpo1 = uni[0].cuerpos[idCuerpo1];
 	cuerpo cuerpo2 = uni[0].cuerpos[idCuerpo2];
 
@@ -722,6 +741,107 @@ void newForces(universo* uni) {
 		}
 	}
 }
+
+void calculoFuerzaCuerpoTree(universo* uni, int idCuerpo, cuaTree* rama) {
+	//Coge el cuerpo idCuerpo, y el arbol rama. 
+	cuerpo cuerpo = uni->cuerpos[idCuerpo];
+	float posX1 = cuerpo.pos[0];
+	float posY1 = cuerpo.pos[1];
+	float posX2 = rama->centroMasasX;
+	float posY2 = rama->centroMasasY;
+
+	float M1 = cuerpo.masa;
+	float M2 = rama->masaTotal;
+
+	float difX = posX1 - posX2;
+	float difY = posY1 - posY2;
+
+	float disTotal = sqrt(difX * difX + difY * difY);
+
+	float F = G * M1 * M2 / (disTotal * disTotal);
+
+	float cos = difX / disTotal;
+	float sen = difY / disTotal;
+
+	float Fx = F * cos;
+	float Fy = F * sen;
+	//Hace literalmente lo mismo que en NCuerposCPU pero tomando los datos de rama
+	cuerpo.fuerzas[0] -= Fx;
+	cuerpo.fuerzas[1] -= Fy;
+
+	uni->cuerpos[idCuerpo] = cuerpo;
+	//Mete el nuevo cuerpo en uni
+}
+
+void forceIterateTree(universo* uni, cuaTree* raiz, int idFila, int idColumna) {
+	//Comprobar que el cuaTree idFila, idColumna existe
+	struct cuaTree* puntTree = uni->punTreeMatriz[idFila][idColumna];
+	struct cuaTree* puntTree2;
+	if (puntTree == NULL) {
+		//No hay cuerpos en el rango de ese tree
+	}
+	else {
+		//Hay punteros en el rango de ese tree. 
+			//Calculo las fuerzas de los cuerpos consigo mismos
+			//Tiene un numero de cuerpos >=1
+		int nCuerpos = puntTree->nCuerpos;
+		for (int i = 0; i < nCuerpos; i++) {
+			for (int j = i + 1; j < nCuerpos; j++) {
+				forceIterate(uni, puntTree->cuerpos[i], puntTree->cuerpos[j]); 
+				//Los cuerpos emiten fuerza entre si con sus posiciones verdaderas
+			}
+		}
+
+		//Calculo las fuerzas con el resto de Trees
+		//Numero de filas y columnas en la matriz de trees
+		int nFilas = (int)pow(2, nNiveles) + 1e-9;
+		int nColumnas = (int)pow(2, nNiveles) + 1e-9;
+		int idCuerpo = -1;
+		for (int i = 0; i < nFilas; i++) {
+			for (int j = 0; j < nColumnas; j++) {
+				//Cojo el tree de posicion i,j
+				puntTree2 = uni->punTreeMatriz[i][j];
+				if (puntTree2 != NULL) {
+					//Si el tree i,j no es un null, tiene masatotal y centros de masa
+					if (i == idFila && j == idColumna) {
+						//Si es este tree no lo comparo consigo mismo
+					}
+					else {
+						//Comparo cada cuerpo con el centro de masas y su masa total
+						for (int k = 0; k < nCuerpos; k++) {
+							idCuerpo = puntTree->cuerpos[k];
+							calculoFuerzaCuerpoTree(uni, idCuerpo, puntTree2);
+							//En esencia, a cada cuerpo del tree (idFila, idColumna) se le hace la iteracion
+							//de fuerza con el tree(i,j)
+						}
+					}
+				}
+			}
+		}
+	}
+
+}
+
+void newForcesTree(universo* uni, cuaTree* raiz) {
+	//Las fuerzas pasan a ser 0
+	for (int i = 0; i < N; i++) {
+		uni->cuerpos[i].fuerzas[0] = 0;
+		uni->cuerpos[i].fuerzas[1] = 0;
+	}
+	//Se calculan las nuevas Fuerzas, yendo de arbol en arbol
+	int nFilas = (int)pow(2, nNiveles) + 1e-9;
+	int nColumnas = (int)pow(2, nNiveles) + 1e-9;
+	for (int i = 0; i < nFilas; i++) {
+		for (int j = 0; j < nColumnas; j++) {
+			forceIterateTree(uni, raiz, i, j);
+		}
+	}
+}
+
+
+
+
+
 
 void newAcel(universo* uni) {
 	float fuerzaX;
@@ -851,15 +971,15 @@ void iterateUniverseTree(universo* uni, int nSegundos, bool print) {
 	int timeLeft = nSegundos;
 	int nIteration = 0;
 	int nIteracionesTotales = nSegundos / TIMELAPSE;
+	int countTree = 0; //Contador que sirve para revisar que cada N iteraciones se limpia y reescribe el tree
 
 	//Crear Tree Raiz
 	struct cuaTree* raiz = (cuaTree*)malloc(sizeof(cuaTree));
 	raiz = new cuaTree;
+	raizTree(uni, raiz);
 	//Ramificar Tree
 	ramificaTree(raiz, uni);
-	int countTree = 0; //Contador que sirve para revisar que cada N iteraciones se limpia y reescribe el tree
 	
-
 	while (timeLeft >= TIMELAPSE) {
 		//PRINT
 		if (print) {
@@ -871,14 +991,16 @@ void iterateUniverseTree(universo* uni, int nSegundos, bool print) {
 		if (countTree == CLEANTREEITERATION) {
 			//Si han pasado x iteraciones, libero la matriz de punteros a ramas finales,
 			//libero el tree y lo relleno de nuevo
-			cleanMatrizTree(uni);
 			liberaTree(raiz);
+			cleanMatrizTree(uni);
+			raizTree(uni, raiz);
 			ramificaTree(raiz, uni);
 			countTree = 0;
 		}
 
 		//PROCESAR EL UNIVERSO
-		newForces(uni);
+		newForcesTree(uni,raiz);
+		
 
 		//NEW acel, pos y speed trabajan sobre forces y uni. Tan solo forces requiere TREE
 		newAcel(uni);
@@ -893,28 +1015,21 @@ void iterateUniverseTree(universo* uni, int nSegundos, bool print) {
 		printCuerpos(uni, nIteration, true, true);
 		writeData(uni, nIteration, nIteracionesTotales + 1);
 	}
+	printf("Termino la funcion de IterarUniversoTree\n");
 }
 
 int main() {
 
 	struct universo* uni = (universo*)malloc(sizeof(universo));
 	uni = new universo;
-	struct cuaTree* raiz = (cuaTree*)malloc(sizeof(cuaTree));
-	raiz = new cuaTree;
-
 	crearUniversoAleatorio(uni); //Rellena uni
-	cleanMatrizTree(uni);
-	raizTree(uni, raiz);
-	ramificaTree(raiz, uni);
+	cleanMatrizTree(uni);//Limpia la matriz de punteros a ramas finales de uni
 
-	for (int i = 0; i < 8; i++) {
-		for (int j = 0; j < 8; j++) {
-			printTree(uni->punTreeMatriz[i][j]);
-		}
-	}
+	printCuerpos(uni, 0, true, true);
+	iterateUniverseTree(uni, 864000, false);
+	printCuerpos(uni, 11, true, true);
 
 
-	//printTree(raiz);
 
 	return 0;
 }

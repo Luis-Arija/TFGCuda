@@ -5,6 +5,6 @@
     "\\N-Cuerpos CPU",
     "\\N-Cuerpos GPU"
   ],
-  "SelectedNode": "\\N-Cuerpos CPU\\main.py",
+  "SelectedNode": "\\N-Cuerpos CPU\\nCPU.cu",
   "PreviewInSolutionExplorer": false
 }

@@ -2,14 +2,18 @@
 #include <cuda.h>
 #include <time.h>
 #include <Windows.h>
-#define N 1000 //Número de cuerpos en el universo
+#define N 10//Número de cuerpos en el universo. MAXIMO 14000
+#define nNiveles 1 //Número de niveles. Máximo 9 por tamaño int
+//tendrán una dim de MAXDIM/pow(2,nNiveles)
+
 #define TIMELAPSE 86400 //Número de segundos que pasan entre instantes
 #define G 6.67428/100000000000
-
-#define MAXDIM 100000000000 // m
-#define MAXSPEED 60000 // m/s
-#define MAXMASS 61000000000
-#define MINMASS 1000000000
+#define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
+#define MAXDIM 15*pow(10, 8)
+#define MAXSPEED 30000 // m/s
+#define MAXMASS 6*pow(10,24)
+#define MINMASS 1*pow(10,23)
+#define CLEANTREEITERATION 5
 #define randnum(min, max) \
         ((rand() % (int)(((max) + 1) - (min))) + (min))
 
@@ -93,7 +97,7 @@ float randomSpeed() {
 	float randomNumber = (float)randomNumber20000();
 	float speed = speed1 + randomNumber * generableSpeed;
 
-	printf("%f\n", speed);
+	//printf("%f\n", speed);
 
 	return speed;
 }
@@ -104,27 +108,31 @@ float randomMass() {
 	float mass = randomNumber * generableMass + MINMASS;
 	//printf("GenerableMass: %f\n", generableMass);
 	//printf("RandomNumber: %f\n", randomNumber);
-	printf("%f\n", mass);
+	//printf("%f\n", mass);
 	
 	return mass;
 }
 
-universo crearUniversoAleatorio(universo* uni) {
-	
-	cuerpo mundo;
-	float vel[2];
-	float pos[2];
-	float masa;
+//Le pasas un puntero malloc y lo rellena
+void crearUniversoAleatorio(universo* uni) {
+
+	struct cuerpo a;
 	for (int i = 0; i < N; i++) {
-		masa = randomMass();
-		vel[0] = randomSpeed();
-		vel[1] = randomSpeed();
-		pos[0] = randomPos();
-		pos[1] = randomPos();
-		uni[0].cuerpos[i] = inicializar(mundo, pos, vel, masa);
+		a = uni->cuerpos[i];
+		a.masa = randomMass();
+		a.vel[0] = randomSpeed();
+		a.vel[1] = randomSpeed();
+		a.pos[0] = randomPos();
+		a.pos[1] = randomPos();
+		a.acel[0] = 0;
+		a.acel[1] = 0;
+		a.fuerzas[0] = 0;
+		a.fuerzas[1] = 0;
+		uni->cuerpos[i] = a;
 
 	}
-	return uni[0];
+
+	//return uni[0];
 }
 
 void forceIterate(universo* uni, int idCuerpo1, int idCuerpo2) {
@@ -180,15 +188,18 @@ void newAcel(universo* uni) {
 	float fuerzaX;
 	float fuerzaY;
 	float masa;
+	float acelX;
+	float acelY;
 	cuerpo cuerpoActual;
 	for (int i = 0; i < N; i++) {
 		cuerpoActual = uni[0].cuerpos[i];
 		fuerzaX = cuerpoActual.fuerzas[0];
 		fuerzaY = cuerpoActual.fuerzas[1];
 		masa = cuerpoActual.masa;
-
-		cuerpoActual.acel[0] = fuerzaX / masa;
-		cuerpoActual.acel[1] = fuerzaY / masa;
+		acelX = fuerzaX / masa;
+		acelY = fuerzaY / masa;
+		cuerpoActual.acel[0] = acelX;
+		cuerpoActual.acel[1] = acelY;
 		
 		uni[0].cuerpos[i] = cuerpoActual;
 	}
@@ -292,6 +303,8 @@ void iterateUniverse(universo* uni, int nSegundos, bool print) {
 		newSpeed(uni);
 		timeLeft -= TIMELAPSE; 
 		nIteration++;
+		printf("llego a antes de newAccel\n");
+		printf("Iteracion n: %d\n", nIteration);
 	}
 	if (print) {
 		printCuerpos(uni, nIteration, true, true);
@@ -304,8 +317,11 @@ int main() {
 	//printf("Tamaño cuerpo: %d\n", sizeof(universo));
 
 	struct universo* uni = (universo*)malloc(sizeof(universo));
-	uni[0] = crearUniversoAleatorio(uni);
-	iterateUniverse(uni, 31536000, true);
+	uni = new universo;
+	crearUniversoAleatorio(uni);
+	printCuerpos(uni, 0, true, true);
+	iterateUniverse(uni, 864000, false);
+	//printCuerpos(uni, 11, true, true);
 
 	return 0;
 }
