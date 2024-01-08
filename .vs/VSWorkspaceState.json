@@ -2,9 +2,11 @@
   "ExpandedNodes": [
     "",
     "\\CuaTreeCPU",
+    "\\CuaTreeGPU",
+    "\\Miscelanea",
     "\\N-Cuerpos CPU",
     "\\N-Cuerpos GPU"
   ],
-  "SelectedNode": "\\N-Cuerpos CPU\\nCPU.cu",
+  "SelectedNode": "\\CuaTreeGPU\\archivo.txt",
   "PreviewInSolutionExplorer": false
 }

@@ -5,8 +5,7 @@
 #define N 10//Número de cuerpos en el universo. MAXIMO 14000
 #define nNiveles 1 //Número de niveles. Máximo 9 por tamaño int
 //tendrán una dim de MAXDIM/pow(2,nNiveles)
-#define CLEANTREEITERATION 2
-
+#define CLEANTREEITERATION 1
 #define TIMELAPSE 86400 //Número de segundos que pasan entre instantes
 #define G 6.67428/100000000000
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
@@ -1026,7 +1025,7 @@ int main() {
 	cleanMatrizTree(uni);//Limpia la matriz de punteros a ramas finales de uni
 
 	printCuerpos(uni, 0, true, true);
-	iterateUniverseTree(uni, 864000, false);
+	iterateUniverseTree(uni, 864000, true);
 	printCuerpos(uni, 11, true, true);
 
 
