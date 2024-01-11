@@ -2,11 +2,11 @@
 #include <cuda.h>
 #include <time.h>
 #include <Windows.h>
-#define N 10//Número de cuerpos en el universo. MAXIMO 14000
-#define nNiveles 1 //Número de niveles. Máximo 9 por tamaño int
+#define N 50//Número de cuerpos en el universo. MAXIMO 14000
+#define nNiveles 4 //Número de niveles. Máximo 9 por tamaño int
 //tendrán una dim de MAXDIM/pow(2,nNiveles)
-#define CLEANTREEITERATION 1
-#define TIMELAPSE 86400 //Número de segundos que pasan entre instantes
+#define CLEANTREEITERATION 1000
+#define TIMELAPSE 8640 //Número de segundos que pasan entre instantes
 #define G 6.67428/100000000000
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
 #define MAXDIM 15*pow(10, 8)
@@ -459,6 +459,8 @@ void raizTreeGPU(universo* uni, cuaTree* raiz) {
 
 }
 
+
+
 int aQueCuadrante(cuerpo a, cuaTree raiz) { 
 	//	1	2
 	//	3	4
@@ -717,7 +719,7 @@ void writeData(universo* uni, int iteracion, int nIteracionesTotales) {
 	float posY;
 	FILE* archivo;
 	// Nombre del archivo
-	const char* nombreArchivo = "archivo.txt";
+	const char* nombreArchivo = "Resultados TreeGPU.txt";
 	if (iteracion == 0) {
 		// Abrir el archivo en modo escritura ("w")
 		archivo = fopen(nombreArchivo, "w");
@@ -768,6 +770,10 @@ void rellenaRamaGPU(universo* uni, cuaTree** punTreeGPU, int** punCuerposGPU) {
 				punCuerposGPU[valor] = uni->punCuerposGPU[i][j];
 
 			}
+			else {
+				punTreeGPU[valor] = NULL;
+				punCuerposGPU[valor] = NULL;
+			}
 		}
 	}
 }
@@ -816,7 +822,8 @@ __device__ void forceIterate(universo* uni, int idCuerpo1, int idCuerpo2) {
 	//Force iterate toma los ids de los cuerpos y los calcula los unos con los otros
 	cuerpo cuerpo1 = uni[0].cuerpos[idCuerpo1];
 	cuerpo cuerpo2 = uni[0].cuerpos[idCuerpo2];
-
+	universo* d_uni;
+	cudaMalloc(&d_uni, sizeof(universo));
 	float posX1 = cuerpo1.pos[0];
 	float posY1 = cuerpo1.pos[1];
 	float posX2 = cuerpo2.pos[0];
@@ -1039,7 +1046,6 @@ void iterateUniverseTreeGPU(universo* uni, int nSegundos, bool print) {
 
 	universo* d_uni;
 	cudaMalloc(&d_uni, sizeof(universo));
-	printf("puntero a d_uni: %p\n", d_uni);
 	cudaMemcpy(d_uni, uni, sizeof(universo), cudaMemcpyHostToDevice);
 
 	
@@ -1089,12 +1095,27 @@ void iterateUniverseTreeGPU(universo* uni, int nSegundos, bool print) {
 
 int main() {
 
+	clock_t tiempo_inicio, tiempo_final;
+	double segundos;
+	int tiempoIteracion = 864000000;
+
 	struct universo* uni = (universo*)malloc(sizeof(universo));
 	uni = new universo;
 	crearUniversoAleatorio(uni); //Rellena uni
 	cleanMatrizTree(uni);//Limpia la matriz de punteros a ramas finales de uni
-	iterateUniverseTreeGPU(uni, 864000, true);
-	//printCuerpos(uni, 11, true, true);
+	
+	printf("Comienzo de la iteracion del universo\n");
+	printf("	Segundos por iteracion:		%d\n", TIMELAPSE);
+	printf("	Tiempo a iterar:		%d\n", tiempoIteracion);
+	printf("	Numero de iteraciones:		%d\n", tiempoIteracion / TIMELAPSE);
+	
+
+	tiempo_inicio = clock();
+	iterateUniverseTreeGPU(uni, tiempoIteracion, true);
+	tiempo_final = clock();
+
+	segundos = (double)(tiempo_final - tiempo_inicio) / CLOCKS_PER_SEC; /*según que estes midiendo el tiempo en segundos es demasiado grande*/
+	printf("\nTIEMPO TARDADO: %f\n", segundos);
 	
 	return 0;
 }

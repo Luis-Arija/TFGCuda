@@ -2,8 +2,8 @@
 #include <cuda.h>
 #include <time.h>
 #include <Windows.h>
-#define N 10//Número de cuerpos en el universo. MAXIMO 14000
-#define nNiveles 1 //Número de niveles. Máximo 9 por tamaño int
+#define N 100//Número de cuerpos en el universo. MAXIMO 14000
+#define nNiveles 8 //Número de niveles. Máximo 9 por tamaño int
 //tendrán una dim de MAXDIM/pow(2,nNiveles)
 #define CLEANTREEITERATION 1
 #define TIMELAPSE 86400 //Número de segundos que pasan entre instantes
@@ -837,11 +837,6 @@ void newForcesTree(universo* uni, cuaTree* raiz) {
 	}
 }
 
-
-
-
-
-
 void newAcel(universo* uni) {
 	float fuerzaX;
 	float fuerzaY;
@@ -917,7 +912,7 @@ void writeData(universo* uni, int iteracion, int nIteracionesTotales) {
 	float posY;
 	FILE* archivo;
 	// Nombre del archivo
-	const char* nombreArchivo = "archivo.txt";
+	const char* nombreArchivo = "Resultados TreeCPU.txt";
 	if (iteracion == 0) {
 		// Abrir el archivo en modo escritura ("w")
 		archivo = fopen(nombreArchivo, "w");
@@ -949,7 +944,7 @@ void iterateUniverse(universo* uni, int nSegundos, bool print) {
 	int nIteracionesTotales = nSegundos / TIMELAPSE;
 	while (timeLeft >= TIMELAPSE) {
 		if (print) {
-			printCuerpos(uni, nIteration, true, true);
+			//printCuerpos(uni, nIteration, true, true);
 			writeData(uni, nIteration, nIteracionesTotales+1);
 		}
 		newForces(uni);
@@ -960,7 +955,7 @@ void iterateUniverse(universo* uni, int nSegundos, bool print) {
 		nIteration++;
 	}
 	if (print) {
-		printCuerpos(uni, nIteration, true, true);
+		//printCuerpos(uni, nIteration, true, true);
 		writeData(uni, nIteration, nIteracionesTotales+1);
 	}
 }
@@ -982,7 +977,7 @@ void iterateUniverseTree(universo* uni, int nSegundos, bool print) {
 	while (timeLeft >= TIMELAPSE) {
 		//PRINT
 		if (print) {
-			printCuerpos(uni, nIteration, true, true);
+			//printCuerpos(uni, nIteration, true, true);
 			writeData(uni, nIteration, nIteracionesTotales + 1);
 		}
 
@@ -1011,7 +1006,7 @@ void iterateUniverseTree(universo* uni, int nSegundos, bool print) {
 	}
 	//PRINT DE LA ITERACION FINAL
 	if (print) {
-		printCuerpos(uni, nIteration, true, true);
+		//printCuerpos(uni, nIteration, true, true);
 		writeData(uni, nIteration, nIteracionesTotales + 1);
 	}
 	printf("Termino la funcion de IterarUniversoTree\n");
@@ -1019,14 +1014,30 @@ void iterateUniverseTree(universo* uni, int nSegundos, bool print) {
 
 int main() {
 
+	clock_t tiempo_inicio, tiempo_final;
+	double segundos;
+	int tiempoIteracion = 31536000;
+
 	struct universo* uni = (universo*)malloc(sizeof(universo));
 	uni = new universo;
 	crearUniversoAleatorio(uni); //Rellena uni
 	cleanMatrizTree(uni);//Limpia la matriz de punteros a ramas finales de uni
+	
+	//printCuerpos(uni, 0, true, true);
+	printf("Comienzo de la iteracion del universo\n");
+	printf("	Segundos por iteracion:		%d\n", TIMELAPSE);
+	printf("	Tiempo a iterar:		%d\n", tiempoIteracion);
+	printf("	Numero de iteraciones:		%d\n", tiempoIteracion / TIMELAPSE);
+	
+	
+	tiempo_inicio = clock();
+	iterateUniverseTree(uni, tiempoIteracion, true);
+	tiempo_final = clock();
 
-	printCuerpos(uni, 0, true, true);
-	iterateUniverseTree(uni, 864000, true);
-	printCuerpos(uni, 11, true, true);
+	segundos = (double)(tiempo_final - tiempo_inicio) / CLOCKS_PER_SEC; /*según que estes midiendo el tiempo en segundos es demasiado grande*/
+
+	printf("\nTIEMPO TARDADO: %f\n", segundos);
+
 
 
 

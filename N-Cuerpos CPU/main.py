@@ -2,7 +2,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import numpy as np
-nombre_archivo = 'archivo.txt'
+nombre_archivo = 'Resultados nCuerposCPU.txt'
 counter = 0;
 texto = "";
 # Abrir el archivo en modo lectura ('r')

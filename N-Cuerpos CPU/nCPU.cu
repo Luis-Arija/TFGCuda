@@ -2,10 +2,10 @@
 #include <cuda.h>
 #include <time.h>
 #include <Windows.h>
-#define N 10//Número de cuerpos en el universo. MAXIMO 14000
-#define nNiveles 1 //Número de niveles. Máximo 9 por tamaño int
+#define N 100//Número de cuerpos en el universo. MAXIMO 14000
+#define nNiveles 8 //Número de niveles. Máximo 9 por tamaño int
 //tendrán una dim de MAXDIM/pow(2,nNiveles)
-
+#define CLEANTREEITERATION 1
 #define TIMELAPSE 86400 //Número de segundos que pasan entre instantes
 #define G 6.67428/100000000000
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
@@ -13,7 +13,6 @@
 #define MAXSPEED 30000 // m/s
 #define MAXMASS 6*pow(10,24)
 #define MINMASS 1*pow(10,23)
-#define CLEANTREEITERATION 5
 #define randnum(min, max) \
         ((rand() % (int)(((max) + 1) - (min))) + (min))
 
@@ -262,7 +261,7 @@ void writeData(universo* uni, int iteracion, int nIteracionesTotales) {
 	float posY;
 	FILE* archivo;
 	// Nombre del archivo
-	const char* nombreArchivo = "archivo.txt";
+	const char* nombreArchivo = "Resultados nCuerposCPU.txt";
 	if (iteracion == 0) {
 		// Abrir el archivo en modo escritura ("w")
 		archivo = fopen(nombreArchivo, "w");
@@ -294,7 +293,7 @@ void iterateUniverse(universo* uni, int nSegundos, bool print) {
 	int nIteracionesTotales = nSegundos / TIMELAPSE;
 	while (timeLeft >= TIMELAPSE) {
 		if (print) {
-			printCuerpos(uni, nIteration, true, true);
+			//printCuerpos(uni, nIteration, true, true);
 			writeData(uni, nIteration, nIteracionesTotales+1);
 		}
 		newForces(uni);
@@ -303,25 +302,36 @@ void iterateUniverse(universo* uni, int nSegundos, bool print) {
 		newSpeed(uni);
 		timeLeft -= TIMELAPSE; 
 		nIteration++;
-		printf("llego a antes de newAccel\n");
-		printf("Iteracion n: %d\n", nIteration);
 	}
 	if (print) {
-		printCuerpos(uni, nIteration, true, true);
+		//printCuerpos(uni, nIteration, true, true);
 		writeData(uni, nIteration, nIteracionesTotales+1);
 	}
 }
 
 int main() {
 
-	//printf("Tamaño cuerpo: %d\n", sizeof(universo));
+	clock_t tiempo_inicio, tiempo_final;
+	double segundos;
+	int tiempoIteracion = 31536000;
 
 	struct universo* uni = (universo*)malloc(sizeof(universo));
 	uni = new universo;
-	crearUniversoAleatorio(uni);
+	crearUniversoAleatorio(uni); //Rellena uni
+	
 	printCuerpos(uni, 0, true, true);
-	iterateUniverse(uni, 864000, false);
-	//printCuerpos(uni, 11, true, true);
+	printf("Comienzo de la iteracion del universo\n");
+	printf("	Segundos por iteracion:		%d\n", TIMELAPSE);
+	printf("	Tiempo a iterar:		%d\n", tiempoIteracion);
+	printf("	Numero de iteraciones:		%d\n", tiempoIteracion / TIMELAPSE);
+	
+	tiempo_inicio = clock();
+	iterateUniverse(uni, tiempoIteracion, true);
+	tiempo_final = clock();
+
+	segundos = (double)(tiempo_final - tiempo_inicio) / CLOCKS_PER_SEC; /*según que estes midiendo el tiempo en segundos es demasiado grande*/
+
+	printf("\nTIEMPO TARDADO: %f\n", segundos);
 
 	return 0;
 }
