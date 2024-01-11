@@ -3,10 +3,11 @@
     "",
     "\\CuaTreeCPU",
     "\\CuaTreeGPU",
+    "\\CuaTreeGPUVerdadero",
     "\\Miscelanea",
     "\\N-Cuerpos CPU",
     "\\N-Cuerpos GPU"
   ],
-  "SelectedNode": "\\N-Cuerpos GPU\\nGPU.cu",
+  "SelectedNode": "\\CuaTreeCPU\\Resultados TreeCPU.txt",
   "PreviewInSolutionExplorer": false
 }
