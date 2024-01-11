@@ -3,10 +3,15 @@
 #include <stdio.h>
 #include <time.h>
 #include <Windows.h>
-#define N 5 //Número de cuerpos en el universo
-#define TIMELAPSE 1 //Número de segundos que pasan entre instantes
-#define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
-#define G 6.67428/100000000000
+
+
+#define N 100					//Número de Cuerpos en el universo
+#define TIMELAPSE 86400			//Número de segundos que pasan entre instantes
+#define G 6.67428/pow(10, 11)	//Constante G
+#define MAXDIM 15*pow(10, 8)	//Rango de posición en X e Y
+#define MAXSPEED 3*pow(10,3)	//Rango de velocidad en X e Y
+#define MAXMASS 6*pow(10,24)	//Masa máxima de un Cuerpo
+#define MINMASS 1*pow(10,23)	//Masa minima de un Cuerpo
 
 
 /*	Orden:
@@ -24,19 +29,20 @@
 
 
 
-//tamaño cuerpo =
+//Tamaño Cuerpo = 36 + 8*N
 struct cuerpo {
-	float pos[2];	//En metros
-	float vel[2];	//En Metros/Segundo
-	float masa;		//En KG
-	float acel[2];	//En Metros/Segundo^2 = F/M
-	float fueTotal[2];
-	float fueVarias[N][2]; //En Newtons (N) = G* (m1*m2) / d^2 
+	float pos[2];			//Array de posición en Metros
+	float vel[2];			//Array de velocidad n Metros/Segundo
+	float masa;				//Masa del cuerpo en KG
+	float acel[2];			//Array de aceleración en Metros/Segundo^2
+	float fueTotal[2];		//Array de fuerzas en Newtons (N)
+	float fueVarias[N][2];	//Matriz de fuerzas en Newtons (N)
 };
 
-//Tamaño universo = N*36 = N*Tamaño_Cuerpo
+//Tamaño Universo CPU = 36*N
+//Tamaño Universo GPU = 8*N^2 + 36*N
 struct universo {
-	struct cuerpo cuerpos[N];
+	struct cuerpo cuerpos[N];//Array de N Cuerpos
 };
 
 //Mete los datos en cuerpo

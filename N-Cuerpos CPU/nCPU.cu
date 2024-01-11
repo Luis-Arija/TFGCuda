@@ -2,19 +2,18 @@
 #include <cuda.h>
 #include <time.h>
 #include <Windows.h>
-#define N 100//Número de cuerpos en el universo. MAXIMO 14000
-#define nNiveles 8 //Número de niveles. Máximo 9 por tamaño int
-//tendrán una dim de MAXDIM/pow(2,nNiveles)
-#define CLEANTREEITERATION 1
-#define TIMELAPSE 86400 //Número de segundos que pasan entre instantes
-#define G 6.67428/100000000000
-#define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
-#define MAXDIM 15*pow(10, 8)
-#define MAXSPEED 30000 // m/s
-#define MAXMASS 6*pow(10,24)
-#define MINMASS 1*pow(10,23)
-#define randnum(min, max) \
-        ((rand() % (int)(((max) + 1) - (min))) + (min))
+
+
+#define N 100					//Número de Cuerpos en el universo
+#define TIMELAPSE 86400			//Número de segundos que pasan entre instantes
+#define G 6.67428/pow(10, 11)	//Constante G
+#define MAXDIM 15*pow(10, 8)	//Rango de posición en X e Y
+#define MAXSPEED 3*pow(10,3)	//Rango de velocidad en X e Y
+#define MAXMASS 6*pow(10,24)	//Masa máxima de un Cuerpo
+#define MINMASS 1*pow(10,23)	//Masa minima de un Cuerpo
+
+
+
 
 /*	Orden:
 		Nueva Fuerza:
@@ -31,18 +30,20 @@
 
 
 
-//tamaño cuerpo =
+//Tamaño Cuerpo = 36
 struct cuerpo {
-	float pos[2];	//En metros, modificado mediante sumas y restas
-	float vel[2];	//En Metros/Segundo, modificado mediante sumas y restas
-	float masa;		//En KG, estático
-	float acel[2];	//En m/s^2, cada iteración es nuevo
-	float fuerzas[2]; //En N, cada iteración es nuevo.
+	float pos[2];			//Array de posición en Metros
+	float vel[2];			//Array de velocidad n Metros/Segundo
+	float masa;				//Masa del cuerpo en KG
+	float acel[2];			//Array de aceleración en Metros/Segundo^2
+	float fuerzas[2];		//Array de fuerzas en Newtons (N)
 };
 
-//Tamaño universo = N*36 = N*Tamaño_Cuerpo
+
+//Tamaño Universo CPU = 36*N
+//Tamaño Universo GPU = 8*N^2 + 36*N
 struct universo {
-	struct cuerpo cuerpos[N];
+	struct cuerpo cuerpos[N];//Array de N Cuerpos
 };
 
 cuerpo inicializar(cuerpo a, float posicion[2], float velocidad[2], float masa) {
