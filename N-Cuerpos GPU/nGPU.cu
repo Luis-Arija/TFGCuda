@@ -1,12 +1,11 @@
 #include <stdio.h>
 #include <cuda.h>
-#include <stdio.h>
 #include <time.h>
 #include <Windows.h>
 
 
-#define N 100					//Número de Cuerpos en el universo
-#define TIMELAPSE 86400			//Número de segundos que pasan entre instantes
+#define N 1024					//Número de Cuerpos en el universo
+#define TIMELAPSE 3600			//Número de segundos que pasan entre instantes
 #define G 6.67428/pow(10, 11)	//Constante G
 #define MAXDIM 15*pow(10, 8)	//Rango de posición en X e Y
 #define MAXSPEED 3*pow(10,3)	//Rango de velocidad en X e Y
@@ -30,13 +29,14 @@
 
 
 //Tamaño Cuerpo = 36 + 8*N
+
 struct cuerpo {
 	float pos[2];			//Array de posición en Metros
 	float vel[2];			//Array de velocidad n Metros/Segundo
 	float masa;				//Masa del cuerpo en KG
 	float acel[2];			//Array de aceleración en Metros/Segundo^2
-	float fueTotal[2];		//Array de fuerzas en Newtons (N)
-	float fueVarias[N][2];	//Matriz de fuerzas en Newtons (N)
+	float fuerzas[2];		//Array de fuerzas en Newtons (N)
+	float nFuerzas[N][2];	//Matriz de fuerzas en Newtons (N)
 };
 
 //Tamaño Universo CPU = 36*N
@@ -45,32 +45,124 @@ struct universo {
 	struct cuerpo cuerpos[N];//Array de N Cuerpos
 };
 
-//Mete los datos en cuerpo
-cuerpo inicializar(cuerpo a, float posicion[2], float velocidad[2], float masa) {
-	a.pos[0] = posicion[0];
-	a.pos[1] = posicion[1];
-	a.vel[0] = velocidad[0];
-	a.vel[1] = velocidad[1];
-	a.masa = masa;
-	return a;
+int randomNumber1000() {
+	int randomNumber;
+	bool checker = true;
+	while (checker) {
+		randomNumber = rand();
+		if (randomNumber <= 1000) {
+			checker = false;
+		}
+	}
+	return randomNumber;
+}
+int randomNumber20000() {
+	int randomNumber;
+	bool checker = true;
+	while (checker) {
+		randomNumber = rand();
+		if (randomNumber <= 20000) {
+			checker = false;
+		}
+	}
+	return randomNumber;
+}
+float randomPos() {
+	float pos1 = 0 - MAXDIM;
+	float generablePos = (MAXDIM) * 2 / 20000;
+	float randomNumber = (float)randomNumber20000();
+	float pos = pos1 + randomNumber * generablePos;
+	return pos;
+}
+float randomSpeed() {
+	float speed1 = 0 - MAXSPEED;
+	float generableSpeed = (MAXSPEED) * 2 / 1000;
+	float randomNumber = (float)randomNumber1000();
+	float speed = speed1 + randomNumber * generableSpeed;
+	return speed;
+}
+float randomMass() {
+	float generableMass = (MAXMASS - MINMASS) / 20000;
+	float randomNumber = (float)randomNumber20000();
+	float mass = randomNumber * generableMass + MINMASS;
+	return mass;
+
+}
+void crearUniversoAleatorio(universo* uni) {
+	struct cuerpo a;
+	for (int i = 0; i < N; i++) {
+		a = uni->cuerpos[i];
+		a.masa = randomMass();
+		a.vel[0] = randomSpeed();
+		a.vel[1] = randomSpeed();
+		a.pos[0] = randomPos();
+		a.pos[1] = randomPos();
+		a.acel[0] = 0;
+		a.acel[1] = 0;
+		a.fuerzas[0] = 0;
+		a.fuerzas[1] = 0;
+		uni->cuerpos[i] = a;
+	}
+}
+void printCuerpos(universo* uni, int iteracion, bool position, bool speed) {
+	cuerpo cuerpoActual;
+	printf("-------- ITERACION %d --------\n\n", iteracion);
+	for (int i = 0; i < N; i++) {
+		cuerpoActual = uni[0].cuerpos[i];
+		printf("Cuerpo %d:\n\n", i);
+		if (position) {
+			printf("--Posicion:\n	X:%f\n	Y:%f\n\n", cuerpoActual.pos[0], cuerpoActual.pos[1]);
+		}
+		if (speed) {
+			printf("--Speed:\n	X:%f\n	Y:%f\n\n", cuerpoActual.vel[0], cuerpoActual.vel[1]);
+		}
+
+	}
+}
+void writeData(universo* uni, int iteracion, int nIteracionesTotales) {
+	cuerpo cuerpoActual;
+	float posX;
+	float posY;
+	FILE* archivo;
+	// Nombre del archivo
+	const char* nombreArchivo = "Resultados nCuerposGPU.txt";
+	if (iteracion == 0) {
+		// Abrir el archivo en modo escritura ("w")
+		archivo = fopen(nombreArchivo, "w");
+		fprintf(archivo, "%d;%d", nIteracionesTotales, N);
+	}
+	else {
+		// Abrir el archivo en modo adición ("a")
+		archivo = fopen(nombreArchivo, "a");
+	}
+
+	for (int i = 0; i < N; i++) {
+		//Obtener datos
+		cuerpoActual = uni[0].cuerpos[i];
+		posX = cuerpoActual.pos[0];
+		posY = cuerpoActual.pos[1];
+
+		fprintf(archivo, "\n%d;%d;%f;%f", iteracion, i, posX, posY);
+		//fprintf(archivo, "\n%f;%f", posX, posY);
+		//Imprimir en formato X;Y
+	}
+
+	fclose(archivo);
+
+
 }
 
-int nCalculos(int ncuerpos) {
-	int sumatorio = 0;
-	for (int i = ncuerpos; i > 1; i--) {
-		sumatorio += i - 1;
-	}
-	return sumatorio;
-}
+
+
 
 __global__ void force0(universo* uni) {
 	for (int i = 0; i < N; i++) {
-		uni[0].cuerpos[i].fueVarias[i][0] = 0;
-		uni[0].cuerpos[i].fueVarias[i][1] = 0;
+		uni[0].cuerpos[i].nFuerzas[i][0] = 0;
+		uni[0].cuerpos[i].nFuerzas[i][1] = 0;
 	}
 }
 
-__global__ void newVariousForce(universo* uni) {
+__global__ void newNForcesGPU(universo* uni) {
 	//Obtener bloque y thread
 	int nBlock = blockIdx.x;
 	int nThread = threadIdx.x;
@@ -99,31 +191,27 @@ __global__ void newVariousForce(universo* uni) {
 		float Fx = F * cos;
 		float Fy = F * sen;
 		
-		uni[0].cuerpos[nBlock].fueVarias[nThread][0] = -Fx;
-		uni[0].cuerpos[nBlock].fueVarias[nThread][1] = -Fy;
+		uni[0].cuerpos[nBlock].nFuerzas[nThread][0] = -Fx;
+		uni[0].cuerpos[nBlock].nFuerzas[nThread][1] = -Fy;
 
-		uni[0].cuerpos[nThread].fueVarias[nBlock][0] = Fx;
-		uni[0].cuerpos[nThread].fueVarias[nBlock][1] = Fy;
+		uni[0].cuerpos[nThread].nFuerzas[nBlock][0] = Fx;
+		uni[0].cuerpos[nThread].nFuerzas[nBlock][1] = Fy;
 
 	}
 
-}
-
-//Tantos bloques como objetos, un thread por dimension. El codigo no es óptimo en pos de ser representativo. 
-__global__ void newForce(universo* uni) {
+} 
+__global__ void newForceGPU(universo* uni) {
 	//Obtener bloque y thread
 	int nBlock = blockIdx.x;
 	int nThread = threadIdx.x;
 	float sum = 0;
 	for (int i = 0; i < N; i++) {
-		sum += uni[0].cuerpos[nBlock].fueVarias[i][nThread];
+		sum += uni[0].cuerpos[nBlock].nFuerzas[i][nThread];
 	}
-	uni[0].cuerpos[nBlock].fueTotal[nThread] = sum;
+	uni[0].cuerpos[nBlock].fuerzas[nThread] = sum;
 
 }
-
-//Tantos bloques como objetos, un thread por dimension. El codigo no es óptimo en pos de ser representativo. 
-__global__ void newAcel(universo* uni) {
+__global__ void newAcelGPU(universo* uni) {
 
 	//Obtener bloque y thread
 	int nBlock = blockIdx.x;
@@ -131,14 +219,12 @@ __global__ void newAcel(universo* uni) {
 
 	//Obtener Masa y Fuerza actual de esta dimension
 	float masa_actual = uni[0].cuerpos[nBlock].masa;
-	float fue_actual = uni[0].cuerpos[nBlock].fueTotal[nThread];
+	float fue_actual = uni[0].cuerpos[nBlock].fuerzas[nThread];
 	//Calcular la nueva Aceleración y meterla en el universo
 	float acel_nueva = fue_actual/masa_actual;
 	uni[0].cuerpos[nBlock].acel[nThread] = acel_nueva;
-}
-
-//Tantos bloques como objetos, un thread por dimension. El codigo no es óptimo en pos de ser representativo. 
-__global__ void newPosition(universo* uni) {
+} 
+__global__ void newPositionGPU(universo* uni) {
 
 	//Obtener bloque y thread
 	int nBlock = blockIdx.x;
@@ -151,9 +237,7 @@ __global__ void newPosition(universo* uni) {
 	float pos_nueva = pos_actual + vel_actual * TIMELAPSE;
 	uni[0].cuerpos[nBlock].pos[nThread] = pos_nueva;
 }
-
-//Tantos bloques como objetos, un thread por dimension. El codigo no es óptimo en pos de ser representativo. 
-__global__ void newSpeed(universo* uni) {
+__global__ void newSpeedGPU(universo* uni) {
 
 	//Obtener bloque y thread
 	int nBlock = blockIdx.x;
@@ -168,60 +252,60 @@ __global__ void newSpeed(universo* uni) {
 	uni[0].cuerpos[nBlock].vel[nThread] = vel_nueva;
 }
 
-__global__ void printUni(universo* uni) {
-	printf("Pos X		Pos Y		VelX		VelY\n");
-	for (int i = 0; i < N; i++) {
-		printf("%f, %f,", uni[0].cuerpos[i].pos[0], uni[0].cuerpos[i].pos[1]);
-		printf("	%f, %f\n", uni[0].cuerpos[i].vel[0], uni[0].cuerpos[i].vel[1]);
-	}
-}
 
-void iterar_universo(universo uni, int tiempo, bool print) {
+void iterteUniverseGPU(universo* uni, int nSegundos, bool print) {
+	int timeLeft = nSegundos;
+	int nIteration = 0;
+	int nIteracionesTotales = nSegundos / TIMELAPSE;
 	universo* d_uni;
 	cudaMalloc(&d_uni, sizeof(universo));
-	cudaMemcpy(d_uni, &uni, sizeof(universo), cudaMemcpyHostToDevice);
-	
-	force0 << <1, 1 >> > (d_uni);
-	printf("Iteracion 0: \n");
-	printUni << <1, 1 >> > (d_uni);
-	for (int i = 0; i <= tiempo; i = i + TIMELAPSE) {
-	
-		printf("Iteracion %d: \n", (i+1));
-		//Obtener fuerzas
-		newVariousForce << <N, N >> > (d_uni);
-		newForce << <N, 2 >> > (d_uni);
-		newAcel << <N, 2 >> > (d_uni);
-		newPosition << <N, 2 >> > (d_uni);
-		newSpeed << <N, 2 >> > (d_uni);
-		//Print situación T=i+Timelapse
+	cudaMemcpy(d_uni, uni, sizeof(universo), cudaMemcpyHostToDevice);
 
-		printUni << <1, 1 >> > (d_uni);
+	while (timeLeft >= TIMELAPSE) {
+		//PRINT
+		if (print) {
+			cudaMemcpy(uni, d_uni, sizeof(universo), cudaMemcpyDeviceToHost);
+			writeData(uni, nIteration, nIteracionesTotales + 1);
+		}
 
+		newNForcesGPU << <N, N >> > (d_uni);
+		newForceGPU << <N, 2 >> > (d_uni);
+		newAcelGPU << <N, 2 >> > (d_uni);
+		newPositionGPU << <N, 2 >> > (d_uni);
+		newSpeedGPU << <N, 2 >> > (d_uni);
+		timeLeft -= TIMELAPSE;
+		nIteration++;
 		cudaDeviceSynchronize();
+	}
+	if (print) {
+		cudaMemcpy(uni, d_uni, sizeof(universo), cudaMemcpyDeviceToHost);
+		writeData(uni, nIteration, nIteracionesTotales + 1);
 	}
 	cudaFree(d_uni);
 }
 
 int main() {
-	
-	//printf("Tamaño cuerpo: %d\n", sizeof(universo));
-	
-	struct cuerpo mundo1;
-	float posicion[] = { 0,0 };
-	float posicion2[] = { 10,10 };
-	float posicion3[] = { 10,-10 };
-	float posicion4[] = { -10,-10 };
-	float posicion5[] = { -10,10 };
-	float velocidad[] = { 0,0 };
-	float masa = 1000000000000;
 
-	struct universo uni;
-	uni.cuerpos[0] = inicializar(mundo1, posicion, velocidad, masa);
-	uni.cuerpos[1] = inicializar(mundo1, posicion2, velocidad, masa);
-	uni.cuerpos[2] = inicializar(mundo1, posicion3, velocidad, masa);
-	uni.cuerpos[3] = inicializar(mundo1, posicion4, velocidad, masa);
-	uni.cuerpos[4] = inicializar(mundo1, posicion5, velocidad, masa);
-	iterar_universo(uni, 20, true);
+	clock_t tiempo_inicio, tiempo_final;
+	double segundos;
+	int tiempoIteracion = 36000;
 
+	struct universo* uni = (universo*)malloc(sizeof(universo));
+	uni = new universo;
+	crearUniversoAleatorio(uni); //Rellena uni
+	
+	printf("Comienzo de la iteracion del universo\n");
+	printf("	Numero de cuerpos:		%d\n", N);
+	printf("	Segundos por iteracion:		%d\n", TIMELAPSE);
+	printf("	Tiempo a iterar:		%d\n", tiempoIteracion);
+	printf("	Numero de iteraciones:		%d\n", tiempoIteracion / TIMELAPSE);
+
+	tiempo_inicio = clock();
+	iterteUniverseGPU(uni, tiempoIteracion, true);
+	tiempo_final = clock();
+
+	segundos = (double)(tiempo_final - tiempo_inicio) / CLOCKS_PER_SEC; /*según que estes midiendo el tiempo en segundos es demasiado grande*/
+
+	printf("\nTIEMPO TARDADO: %f\n", segundos);
 	return 0;
 }

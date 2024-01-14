@@ -4,14 +4,13 @@
 #include <Windows.h>
 
 
-#define N 100					//Número de Cuerpos en el universo
-#define TIMELAPSE 86400			//Número de segundos que pasan entre instantes
+#define N 10000					//Número de Cuerpos en el universo
+#define TIMELAPSE 3600			//Número de segundos que pasan entre instantes
 #define G 6.67428/pow(10, 11)	//Constante G
 #define MAXDIM 15*pow(10, 8)	//Rango de posición en X e Y
 #define MAXSPEED 3*pow(10,3)	//Rango de velocidad en X e Y
 #define MAXMASS 6*pow(10,24)	//Masa máxima de un Cuerpo
 #define MINMASS 1*pow(10,23)	//Masa minima de un Cuerpo
-
 
 
 
@@ -31,6 +30,7 @@
 
 
 //Tamaño Cuerpo = 36
+
 struct cuerpo {
 	float pos[2];			//Array de posición en Metros
 	float vel[2];			//Array de velocidad n Metros/Segundo
@@ -42,24 +42,12 @@ struct cuerpo {
 
 //Tamaño Universo CPU = 36*N
 //Tamaño Universo GPU = 8*N^2 + 36*N
+
 struct universo {
 	struct cuerpo cuerpos[N];//Array de N Cuerpos
 };
 
-cuerpo inicializar(cuerpo a, float posicion[2], float velocidad[2], float masa) {
-	a.pos[0] = posicion[0];
-	a.pos[1] = posicion[1];
-	a.vel[0] = velocidad[0];
-	a.vel[1] = velocidad[1];
-	a.acel[0] = 0;
-	a.acel[1] = 0;
-	a.fuerzas[0] = 0;
-	a.fuerzas[1] = 0;
-	a.masa = masa;
-	return a;
-}
-
-int randomNumber1000(){
+int randomNumber1000() {
 	int randomNumber;
 	bool checker = true;
 	while (checker) {
@@ -81,41 +69,28 @@ int randomNumber20000() {
 	}
 	return randomNumber;
 }
-
 float randomPos() {
-	float pos1 = 0-MAXDIM;
-	float generablePos = (MAXDIM)*2 / 20000;
+	float pos1 = 0 - MAXDIM;
+	float generablePos = (MAXDIM) * 2 / 20000;
 	float randomNumber = (float)randomNumber20000();
 	float pos = pos1 + randomNumber * generablePos;
-
 	return pos;
 }
-
 float randomSpeed() {
 	float speed1 = 0 - MAXSPEED;
-	float generableSpeed = (MAXSPEED) * 2 / 20000;
-	float randomNumber = (float)randomNumber20000();
+	float generableSpeed = (MAXSPEED) * 2 / 1000;
+	float randomNumber = (float)randomNumber1000();
 	float speed = speed1 + randomNumber * generableSpeed;
-
-	//printf("%f\n", speed);
-
 	return speed;
 }
-
 float randomMass() {
-	float generableMass = (MAXMASS - MINMASS) / 1000;
-	float randomNumber = (float) randomNumber1000();
+	float generableMass = (MAXMASS - MINMASS) / 20000;
+	float randomNumber = (float)randomNumber20000();
 	float mass = randomNumber * generableMass + MINMASS;
-	//printf("GenerableMass: %f\n", generableMass);
-	//printf("RandomNumber: %f\n", randomNumber);
-	//printf("%f\n", mass);
-	
 	return mass;
+
 }
-
-//Le pasas un puntero malloc y lo rellena
 void crearUniversoAleatorio(universo* uni) {
-
 	struct cuerpo a;
 	for (int i = 0; i < N; i++) {
 		a = uni->cuerpos[i];
@@ -129,11 +104,58 @@ void crearUniversoAleatorio(universo* uni) {
 		a.fuerzas[0] = 0;
 		a.fuerzas[1] = 0;
 		uni->cuerpos[i] = a;
-
+	}
+}
+void writeData(universo* uni, int iteracion, int nIteracionesTotales) {
+	cuerpo cuerpoActual;
+	float posX;
+	float posY;
+	FILE* archivo;
+	// Nombre del archivo
+	const char* nombreArchivo = "Resultados nCuerposGPU.txt";
+	if (iteracion == 0) {
+		// Abrir el archivo en modo escritura ("w")
+		archivo = fopen(nombreArchivo, "w");
+		fprintf(archivo, "%d;%d", nIteracionesTotales, N);
+	}
+	else {
+		// Abrir el archivo en modo adición ("a")
+		archivo = fopen(nombreArchivo, "a");
 	}
 
-	//return uni[0];
+	for (int i = 0; i < N; i++) {
+		//Obtener datos
+		cuerpoActual = uni[0].cuerpos[i];
+		posX = cuerpoActual.pos[0];
+		posY = cuerpoActual.pos[1];
+
+		fprintf(archivo, "\n%d;%d;%f;%f", iteracion, i, posX, posY);
+		//fprintf(archivo, "\n%f;%f", posX, posY);
+		//Imprimir en formato X;Y
+	}
+
+	fclose(archivo);
+
+
 }
+
+
+void printCuerpos(universo* uni, int iteracion, bool position, bool speed) {
+	cuerpo cuerpoActual;
+	printf("-------- ITERACION %d --------\n\n", iteracion);
+	for (int i = 0; i < N; i++) {
+		cuerpoActual = uni[0].cuerpos[i];
+		printf("Cuerpo %d:\n\n", i);
+		if (position) {
+			printf("--Posicion:\n	X:%f\n	Y:%f\n\n", cuerpoActual.pos[0], cuerpoActual.pos[1]);
+		}
+		if (speed) {
+			printf("--Speed:\n	X:%f\n	Y:%f\n\n", cuerpoActual.vel[0], cuerpoActual.vel[1]);
+		}
+
+	}
+}
+
 
 void forceIterate(universo* uni, int idCuerpo1, int idCuerpo2) {
 
@@ -170,7 +192,6 @@ void forceIterate(universo* uni, int idCuerpo1, int idCuerpo2) {
 	uni[0].cuerpos[idCuerpo1] = cuerpo1;
 	uni[0].cuerpos[idCuerpo2] = cuerpo2;
 }
-
 void newForces(universo* uni) {
 	//Las fuerzas pasan a ser 0
 	for (int i = 0; i < N; i++) {
@@ -183,7 +204,6 @@ void newForces(universo* uni) {
 		}
 	}
 }
-
 void newAcel(universo* uni) {
 	float fuerzaX;
 	float fuerzaY;
@@ -204,7 +224,6 @@ void newAcel(universo* uni) {
 		uni[0].cuerpos[i] = cuerpoActual;
 	}
 }
-
 void newPosition(universo * uni) {
 	float velX;
 	float velY;
@@ -222,7 +241,6 @@ void newPosition(universo * uni) {
 		uni[0].cuerpos[i] = cuerpoActual;
 	}
 }
-
 void newSpeed (universo* uni) {
 	float acelX;
 	float acelY;
@@ -239,62 +257,12 @@ void newSpeed (universo* uni) {
 		uni[0].cuerpos[i] = cuerpoActual;
 	}
 }
-
-void printCuerpos(universo* uni, int iteracion, bool position, bool speed) {
-	cuerpo cuerpoActual;
-	printf("-------- ITERACION %d --------\n\n", iteracion);
-	for (int i = 0; i < N; i++) {
-		cuerpoActual = uni[0].cuerpos[i];
-		printf("Cuerpo %d:\n\n", i);
-		if (position) {
-			printf("--Posicion:\n	X:%f\n	Y:%f\n\n", cuerpoActual.pos[0], cuerpoActual.pos[1]);
-		}
-		if (speed) {
-			printf("--Speed:\n	X:%f\n	Y:%f\n\n", cuerpoActual.vel[0], cuerpoActual.vel[1]);
-		}
-
-	}
-}
-
-void writeData(universo* uni, int iteracion, int nIteracionesTotales) {
-	cuerpo cuerpoActual;
-	float posX;
-	float posY;
-	FILE* archivo;
-	// Nombre del archivo
-	const char* nombreArchivo = "Resultados nCuerposCPU.txt";
-	if (iteracion == 0) {
-		// Abrir el archivo en modo escritura ("w")
-		archivo = fopen(nombreArchivo, "w");
-		fprintf(archivo, "%d;%d", nIteracionesTotales, N);
-	} else {
-		// Abrir el archivo en modo adición ("a")
-		archivo = fopen(nombreArchivo, "a");
-	}
-
-	for (int i = 0; i < N; i++) {
-		//Obtener datos
-		cuerpoActual = uni[0].cuerpos[i];
-		posX = cuerpoActual.pos[0];
-		posY = cuerpoActual.pos[1];
-
-		fprintf(archivo, "\n%d;%d;%f;%f", iteracion, i, posX, posY); 
-		//fprintf(archivo, "\n%f;%f", posX, posY);
-		//Imprimir en formato X;Y
-	}
-
-	fclose(archivo);
-
-
-}
-
 void iterateUniverse(universo* uni, int nSegundos, bool print) {
 	int timeLeft = nSegundos;
 	int nIteration = 0;
 	int nIteracionesTotales = nSegundos / TIMELAPSE;
 	while (timeLeft >= TIMELAPSE) {
 		if (print) {
-			//printCuerpos(uni, nIteration, true, true);
 			writeData(uni, nIteration, nIteracionesTotales+1);
 		}
 		newForces(uni);
@@ -305,23 +273,24 @@ void iterateUniverse(universo* uni, int nSegundos, bool print) {
 		nIteration++;
 	}
 	if (print) {
-		//printCuerpos(uni, nIteration, true, true);
 		writeData(uni, nIteration, nIteracionesTotales+1);
 	}
 }
+
+
 
 int main() {
 
 	clock_t tiempo_inicio, tiempo_final;
 	double segundos;
-	int tiempoIteracion = 31536000;
+	int tiempoIteracion = 36000;
 
 	struct universo* uni = (universo*)malloc(sizeof(universo));
 	uni = new universo;
 	crearUniversoAleatorio(uni); //Rellena uni
 	
-	printCuerpos(uni, 0, true, true);
 	printf("Comienzo de la iteracion del universo\n");
+	printf("	Numero de cuerpos:		%d\n", N);
 	printf("	Segundos por iteracion:		%d\n", TIMELAPSE);
 	printf("	Tiempo a iterar:		%d\n", tiempoIteracion);
 	printf("	Numero de iteraciones:		%d\n", tiempoIteracion / TIMELAPSE);

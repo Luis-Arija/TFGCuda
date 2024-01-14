@@ -2,20 +2,17 @@
 #include <cuda.h>
 #include <time.h>
 #include <Windows.h>
-#define N 100//Número de cuerpos en el universo. MAXIMO 14000
-#define nNiveles 8 //Número de niveles. Máximo 9 por tamaño int
-//tendrán una dim de MAXDIM/pow(2,nNiveles)
-#define CLEANTREEITERATION 1
-#define TIMELAPSE 86400 //Número de segundos que pasan entre instantes
-#define G 6.67428/100000000000
-#define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
-#define MAXDIM 15*pow(10, 8)
-#define MAXSPEED 30000 // m/s
-#define MAXMASS 6*pow(10,24)
-#define MINMASS 1*pow(10,23)
-#define randnum(min, max) \
-        ((rand() % (int)(((max) + 1) - (min))) + (min))
 
+#define N 10000					//Número de Cuerpos en el universo
+#define TIMELAPSE 3600			//Número de segundos que pasan entre instantes
+#define G 6.67428/pow(10, 11)	//Constante G
+#define MAXDIM 15*pow(10, 8)	//Rango de posición en X e Y
+#define MAXSPEED 3*pow(10,3)	//Rango de velocidad en X e Y
+#define MAXMASS 6*pow(10,24)	//Masa máxima de un Cuerpo
+#define MINMASS 1*pow(10,23)	//Masa minima de un Cuerpo
+#define nNiveles 8 
+#define SIZE pow(2,nNiveles)
+#define CLEANTREEITERATION 1
 
 
 //STRUCTS
@@ -1009,14 +1006,14 @@ void iterateUniverseTree(universo* uni, int nSegundos, bool print) {
 		//printCuerpos(uni, nIteration, true, true);
 		writeData(uni, nIteration, nIteracionesTotales + 1);
 	}
-	printf("Termino la funcion de IterarUniversoTree\n");
+	//printf("Termino la funcion de IterarUniversoTree\n");
 }
 
 int main() {
 
 	clock_t tiempo_inicio, tiempo_final;
 	double segundos;
-	int tiempoIteracion = 31536000;
+	int tiempoIteracion = 36000;
 
 	struct universo* uni = (universo*)malloc(sizeof(universo));
 	uni = new universo;
@@ -1025,6 +1022,7 @@ int main() {
 	
 	//printCuerpos(uni, 0, true, true);
 	printf("Comienzo de la iteracion del universo\n");
+	printf("	Numero de cuerpos:		%d\n", N);
 	printf("	Segundos por iteracion:		%d\n", TIMELAPSE);
 	printf("	Tiempo a iterar:		%d\n", tiempoIteracion);
 	printf("	Numero de iteraciones:		%d\n", tiempoIteracion / TIMELAPSE);

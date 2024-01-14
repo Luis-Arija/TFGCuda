@@ -3,17 +3,16 @@
 #include <time.h>
 #include <Windows.h>
 
-
-#define N 4					//Número de Cuerpos en el universo
-#define TIMELAPSE 86400			//Número de segundos que pasan entre instantes
+#define N 1024					//Número de Cuerpos en el universo
+#define TIMELAPSE 3600			//Número de segundos que pasan entre instantes
 #define G 6.67428/pow(10, 11)	//Constante G
 #define MAXDIM 15*pow(10, 8)	//Rango de posición en X e Y
 #define MAXSPEED 3*pow(10,3)	//Rango de velocidad en X e Y
 #define MAXMASS 6*pow(10,24)	//Masa máxima de un Cuerpo
 #define MINMASS 1*pow(10,23)	//Masa minima de un Cuerpo
-#define nNiveles 8 
+#define nNiveles 5
 #define SIZE pow(2,nNiveles)
-#define CLEANTREEITERATION 20
+#define CLEANTREEITERATION 1
 
 
 //STRUCTS
@@ -51,7 +50,7 @@ struct cuaTree {
 struct universo {
 	struct cuerpo cuerpos[N];
 	struct cuaTree*** punTreeMatriz;
-	//Puntero a punteros de punteros de Tree's -> Un puntero a un array [nFilas][nColumnas]
+	//Puntero a punteros de punteros de Tree's -> Un puntero a un array [SIZE][SIZE]
 };//Si no uso punteros a los niveles más bajos, tendré que nadar a traves de las ramas en ambas direcciones. 
 //Ejemplo, un tree a la izquierda de un tree de cuadrante 1 es su primo. Para alcanzarle, tengo que ir al abuelo del original, escoger el hijo adecuado, 
 // y el hijo de ese hijo. Todo para un tree que está más cerca que su hermano del cuadrante 4
@@ -190,6 +189,14 @@ void printCuerpos(universo* uni, int iteracion, bool position, bool speed) {
 	}
 }
 
+int nTreesCreados() {
+	int devuelto = 0;
+	for (int i = 0; i <= nNiveles; i++) {
+		devuelto += pow(4, i);
+	}
+	return devuelto;
+
+}
 
 //Host
 void writeData(universo* uni, int iteracion, int nIteracionesTotales) {
@@ -318,7 +325,12 @@ __global__ void printPunTree(universo* uni) {
 
 }
 
-
+__global__ void crearPunTree(universo* d_uni) {
+	d_uni->punTreeMatriz = (cuaTree***)malloc(sizeof(cuaTree**) * SIZE);
+	for (int i = 0; i < SIZE; i++) {
+		d_uni->punTreeMatriz[i] = (cuaTree**)malloc(sizeof(cuaTree*) * SIZE);
+	}
+}
 
 
 
@@ -776,6 +788,9 @@ __device__ void calculoFuerzaCuerpoTree(universo* uni, int idCuerpo, cuaTree* ra
 }
 
 //device
+__global__ void pez() {
+
+}
 __global__ void forceIterateTree(universo* d_uni) {
 	//Comprobar que el cuaTree idFila, idColumna existe
 	int idFila = blockIdx.x;
@@ -816,6 +831,7 @@ __global__ void forceIterateTree(universo* d_uni) {
 						for (int k = 0; k < nCuerpos; k++) {
 							idCuerpo = puntTree->cuerpos[k];
 							calculoFuerzaCuerpoTree(d_uni, idCuerpo, puntTree2);
+							
 							//En esencia, a cada cuerpo del tree (idFila, idColumna) se le hace la iteracion
 							//de fuerza con el tree(i,j)
 						}
@@ -837,11 +853,11 @@ __global__ void newAcel(universo* uni) {
 	int nThread = threadIdx.x;
 
 	//Obtener Masa y Fuerza actual de esta dimension
-	float masa_actual = uni[0].cuerpos[nBlock].masa;
-	float fue_actual = uni[0].cuerpos[nBlock].fuerzas[nThread];
+	float masa_actual = uni->cuerpos[nBlock].masa;
+	float fue_actual = uni->cuerpos[nBlock].fuerzas[nThread];
 	//Calcular la nueva Aceleración y meterla en el universo
 	float acel_nueva = fue_actual / masa_actual;
-	uni[0].cuerpos[nBlock].acel[nThread] = acel_nueva;
+	uni->cuerpos[nBlock].acel[nThread] = acel_nueva;
 }
 
 //Tantos bloques como objetos, un thread por dimension. El codigo no es óptimo en pos de ser representativo. 
@@ -898,7 +914,6 @@ __global__ void cuda_hello() {
 }
 
 __global__ void raizTree(universo* uni, cuaTree* raiz) { // << < 1, 1> >>
-	printf("Hello World");
 	int* cuerpos = (int*)malloc(N * sizeof(int));
 	float masaTotal = 0.0;
 
@@ -941,11 +956,14 @@ void iterateUniverseTreeGPU(universo* uni, int nSegundos, bool print) {
 	universo* d_uni;
 	cudaMalloc(&d_uni, sizeof(universo));
 	cudaMemcpy(d_uni, uni, sizeof(universo), cudaMemcpyHostToDevice);
+	crearPunTree << <1, 1 >> > (d_uni);
+	//Tenemos contenido, falta punTree
 	struct cuaTree* d_raiz;
 	cudaMalloc(&d_raiz, sizeof(cuaTree));
 	
 	//Estamos en Host. Necesitamos trabajar en device: Global
-	//raizTree << <1, 1 >> > (d_uni, d_raiz);
+	raizTree << <1, 1 >> > (d_uni, d_raiz);
+	cudaDeviceSynchronize();
 	
 	while (timeLeft >= TIMELAPSE) {
 
@@ -964,7 +982,6 @@ void iterateUniverseTreeGPU(universo* uni, int nSegundos, bool print) {
 			
 			cleanMatrizTree << <SIZE, SIZE >> > (d_uni);
 			preLiberaTree << <1, 1 >> > (d_raiz);
-			cudaDeviceSynchronize();
 			raizTree << <1, 1 >> > (d_uni, d_raiz);
 			countTree = 0;
 
@@ -972,17 +989,13 @@ void iterateUniverseTreeGPU(universo* uni, int nSegundos, bool print) {
 		}
 
 		//PROCESAR EL UNIVERSO
-		//fuerzasZero << <1, 1 >> > (d_uni);
+		fuerzasZero << <1, 1 >> > (d_uni);
+		forceIterateTree << <SIZE, SIZE >> > (d_uni);
 
-		//forceIterateTree << <SIZE, SIZE >> > (d_uni);
-		cudaDeviceSynchronize();
 		
-		//newAcel << <N, 2 >> > (d_uni);
-		//cudaDeviceSynchronize();
-		//newPosition << <N, 2 >> > (d_uni);
-		//cudaDeviceSynchronize();
+		newAcel << <N, 2 >> > (d_uni);
+		newPosition << <N, 2 >> > (d_uni);
 		newSpeed << <N, 2 >> > (d_uni);
-		cudaDeviceSynchronize();
 
 		timeLeft -= TIMELAPSE;
 		nIteration++;
@@ -996,15 +1009,16 @@ void iterateUniverseTreeGPU(universo* uni, int nSegundos, bool print) {
 		cudaMemcpy(uni, d_uni, sizeof(universo), cudaMemcpyDeviceToHost);
 		writeData(uni, nIteration, nIteracionesTotales + 1);
 	}
-	printf("Termino la funcion de IterarUniversoTree\n");
+	cudaDeviceSynchronize();
+	//printf("Termino la funcion de IterarUniversoTree\n");
 }
 
 int main() {
-	cuda_hello << <1, 1 >> > ();
+
 	cudaThreadSetLimit(cudaLimitMallocHeapSize, 128 * 1024 * 1024);
 	clock_t tiempo_inicio, tiempo_final;
 	double segundos;
-	int tiempoIteracion = 864000; //1 año
+	int tiempoIteracion = 36000; 
 
 	struct universo* uni = (universo*)malloc(sizeof(universo));
 	uni = new universo;
@@ -1013,13 +1027,14 @@ int main() {
 	
 	//printCuerpos(uni, 0, true, true);
 	printf("Comienzo de la iteracion del universo\n");
+	printf("	Numero de cuerpos:		%d\n", N);
 	printf("	Segundos por iteracion:		%d\n", TIMELAPSE);
 	printf("	Tiempo a iterar:		%d\n", tiempoIteracion);
 	printf("	Numero de iteraciones:		%d\n", tiempoIteracion / TIMELAPSE);
 	
 	
 	tiempo_inicio = clock();
-	iterateUniverseTreeGPU(uni, tiempoIteracion, true);
+	iterateUniverseTreeGPU(uni, tiempoIteracion, false);
 	tiempo_final = clock();
 
 	segundos = (double)(tiempo_final - tiempo_inicio) / CLOCKS_PER_SEC; /*según que estes midiendo el tiempo en segundos es demasiado grande*/
