@@ -3,25 +3,26 @@
 #include <time.h>
 #include <Windows.h>
 
-#define N 1024					//Número de Cuerpos en el universo
+#define N 10000					//Número de Cuerpos en el universo
 #define TIMELAPSE 3600			//Número de segundos que pasan entre instantes
 #define G 6.67428/pow(10, 11)	//Constante G
 #define MAXDIM 15*pow(10, 8)	//Rango de posición en X e Y
 #define MAXSPEED 3*pow(10,3)	//Rango de velocidad en X e Y
 #define MAXMASS 6*pow(10,24)	//Masa máxima de un Cuerpo
 #define MINMASS 1*pow(10,23)	//Masa minima de un Cuerpo
-#define nNiveles 5
+#define nNiveles 8
 #define SIZE pow(2,nNiveles)
 #define CLEANTREEITERATION 1
 
 
+
 //STRUCTS
 struct cuerpo {
-	float pos[2];	//En metros, modificado mediante sumas y restas
-	float vel[2];	//En Metros/Segundo, modificado mediante sumas y restas
-	float masa;		//En KG, estático
-	float acel[2];	//En m/s^2, cada iteración es nuevo
-	float fuerzas[2]; //En N, cada iteración es nuevo.
+	float pos[2];	//En metros
+	float vel[2];	//En Metros/Segundo
+	float masa;		//En KG
+	float acel[2];	//En Metros/Segundo^2 = F/M
+	float fuerzas[2];
 };
 
 struct cuaTree {
@@ -50,8 +51,12 @@ struct cuaTree {
 struct universo {
 	struct cuerpo cuerpos[N];
 	struct cuaTree*** punTreeMatriz;
-	//Puntero a punteros de punteros de Tree's -> Un puntero a un array [SIZE][SIZE]
-};//Si no uso punteros a los niveles más bajos, tendré que nadar a traves de las ramas en ambas direcciones. 
+	struct cuaTree*** punTreeMatrizGPU;
+	int*** punCuerposGPU;
+	};
+
+
+//Si no uso punteros a los niveles más bajos, tendré que nadar a traves de las ramas en ambas direcciones. 
 //Ejemplo, un tree a la izquierda de un tree de cuadrante 1 es su primo. Para alcanzarle, tengo que ir al abuelo del original, escoger el hijo adecuado, 
 // y el hijo de ese hijo. Todo para un tree que está más cerca que su hermano del cuadrante 4
 //Por ello, punteros. 
@@ -129,31 +134,20 @@ void crearUniversoAleatorio(universo* uni) {
 	}
 
 	//punTree
-	int nFilas = (int)pow(2, nNiveles) + 1e-9;
-	int nColumnas = (int)pow(2, nNiveles) + 1e-9;
+	int nFilas = (int) pow(2, nNiveles) + 1e-9;
+	int nColumnas = (int) pow(2, nNiveles) + 1e-9;
 
 	uni->punTreeMatriz = (cuaTree***)malloc(sizeof(cuaTree**) * nFilas);
+	uni->punTreeMatrizGPU = (cuaTree***)malloc(sizeof(cuaTree**) * nFilas);
+	uni->punCuerposGPU = (int***)malloc(sizeof(int**) * nFilas);
 	for (int i = 0; i < nFilas; i++) {
-		uni->punTreeMatriz[i] = (cuaTree**)malloc(sizeof(cuaTree*) * nColumnas);
+		uni->punTreeMatriz[i]=(cuaTree**)malloc(sizeof(cuaTree*)* nColumnas);
+		uni->punTreeMatrizGPU[i] = (cuaTree**)malloc(sizeof(cuaTree*) * nColumnas);
+		uni->punCuerposGPU[i] = (int**)malloc(sizeof(int*) * nColumnas);
 	}
 
 	//return uni[0];
 }
-
-
-void cleanMatrizTreeHost(universo* uni) {
-	//punTree
-	int nFilas = (int)pow(2, nNiveles) + 1e-9;
-	int nColumnas = (int)pow(2, nNiveles) + 1e-9;
-	for (int i = 0; i < nFilas; i++) {
-		for (int j = 0; j < nColumnas; j++) {
-			uni->punTreeMatriz[i][j] = NULL;
-		}
-	}
-}
-
-
-//Prints
 void printCuerpos(universo* uni, int iteracion, bool position, bool speed) {
 	cuerpo cuerpoActual;
 	printf("-------- ITERACION %d --------\n\n", iteracion);
@@ -169,15 +163,13 @@ void printCuerpos(universo* uni, int iteracion, bool position, bool speed) {
 
 	}
 }
-
-
 void writeData(universo* uni, int iteracion, int nIteracionesTotales) {
 	cuerpo cuerpoActual;
 	float posX;
 	float posY;
 	FILE* archivo;
 	// Nombre del archivo
-	const char* nombreArchivo = "Resultados TreeGPUBIEN.txt";
+	const char* nombreArchivo = "Resultados TreeGPU.txt";
 	if (iteracion == 0) {
 		// Abrir el archivo en modo escritura ("w")
 		archivo = fopen(nombreArchivo, "w");
@@ -278,7 +270,6 @@ void printTree(cuaTree* raiz) {
 }
 void printPunTree(universo* uni) {
 	int nFilas = pow(2, nNiveles);
-	printf("\nInside PrintPunTree\n");
 	for (int i = 0; i < nFilas; i++) {
 		for (int j = 0; j < nFilas; j++) {
 			if (uni->punTreeMatriz[i][j] != NULL) {
@@ -296,11 +287,8 @@ void printPunTree(universo* uni) {
 
 
 
+float centroMasasX(cuaTree* raiz, universo* uni) {
 
-
-
-__device__ float centroMasasX(cuaTree* raiz, universo* uni) {
-	
 	float devuelto = 0;
 	float sumatorioMasas = 0;
 	cuerpo a;
@@ -345,12 +333,12 @@ __device__ float centroMasasX(cuaTree* raiz, universo* uni) {
 			devuelto += a.pos[0] * a.masa;
 		}
 	}
-	
+
 	devuelto = devuelto / sumatorioMasas;
 
 	return devuelto;
 }
-__device__ float centroMasasY(cuaTree* raiz, universo* uni) {
+float centroMasasY(cuaTree* raiz, universo* uni) {
 
 	float devuelto = 0;
 	float sumatorioMasas = 0;
@@ -358,7 +346,7 @@ __device__ float centroMasasY(cuaTree* raiz, universo* uni) {
 	cuaTree* ramaActual;
 
 	if (raiz[0].tieneRamas) {
-		
+
 		ramaActual = raiz[0].rama1;
 		if (ramaActual != NULL) {
 			devuelto += ramaActual->centroMasasY * ramaActual->masaTotal;
@@ -401,7 +389,7 @@ __device__ float centroMasasY(cuaTree* raiz, universo* uni) {
 
 	return devuelto;
 }
-__device__ int pathAPunteroFila(int path) {
+int pathAPunteroFila(int path) {
 	int pathMio = path;
 	int apoyo = 0;
 	int devuelto = 0;
@@ -419,7 +407,7 @@ __device__ int pathAPunteroFila(int path) {
 	return devuelto;
 
 }
-__device__ int pathAPunteroColumna(int path) {
+int pathAPunteroColumna(int path) {
 	int pathMio = path;
 	int apoyo = 0;
 	int devuelto = 0;
@@ -437,7 +425,7 @@ __device__ int pathAPunteroColumna(int path) {
 	return devuelto;
 
 }
-__device__ int aQueCuadrante(cuerpo a, cuaTree raiz) {
+int aQueCuadrante(cuerpo a, cuaTree raiz) {
 	//	1	2
 	//	3	4
 	int cuadrante = 1;
@@ -450,7 +438,7 @@ __device__ int aQueCuadrante(cuerpo a, cuaTree raiz) {
 	float posX = a.pos[0];
 	float posY = a.pos[1];
 
-	float midX = (minX + maxX) / 2; 
+	float midX = (minX + maxX) / 2;
 	float midY = (minY + maxY) / 2;
 
 	if (posX > midX) { //(midX,maxX] 
@@ -464,13 +452,40 @@ __device__ int aQueCuadrante(cuerpo a, cuaTree raiz) {
 	//1-> ( posX C (midX,maxX], posY C (midY, maxY] ) -> ( posX C  (0,10], posY C  (0, 10] )
 	//2-> ( posX C [minX,midX], posY C [minY, midY] ) -> ( posX C [-10,0], posY C [-10, 0] )
 	//3-> ( posX C (midX,maxX], posY C [minY, midY] ) -> ( posX C  (0,10], posY C [-10, 0] )
-	
+
 	//Cuerpos en el Eje Y pertenecen a cuadrantes izquierdos
 	//Cuerpos en el Eje X pertenecen a cuadrantes inferiores
 	//Punto medio pertenece a cuadrante 2.
 	return cuadrante;
 }
-__device__ cuaTree* rellenaTree(universo* uni, cuaTree* raiz, int cuadrante, int nCuerpos, int* cuerpos, float masaTotal, float maxX, float maxY, float minX, float minY) {
+void raizTreeGPU(universo* uni, cuaTree* raiz) {
+
+	int* cuerpos = (int*)malloc(N * sizeof(int));
+	float masaTotal = 0.0;
+
+	for (int i = 0; i < N; i++) {
+		cuerpos[i] = i;
+		masaTotal += uni->cuerpos[i].masa;
+	}
+
+	raiz->path = 0;
+	raiz->cuadrante = 0;
+	raiz->nivelTree = 0;
+
+	raiz->nCuerpos = N;
+	raiz->cuerpos = cuerpos;
+
+	raiz->masaTotal = masaTotal;
+	raiz->centroMasasX = centroMasasX(raiz, uni);
+	raiz->centroMasasY = centroMasasY(raiz, uni);
+
+	raiz->maxX = MAXDIM;
+	raiz->maxY = MAXDIM;
+	raiz->minX = 0.0 - MAXDIM;
+	raiz->minY = 0.0 - MAXDIM;
+
+}
+cuaTree* rellenaTree(universo* uni, cuaTree* raiz, int cuadrante, int nCuerpos, int* cuerpos, float masaTotal, float maxX, float maxY, float minX, float minY) {
 
 	//Hago espacio para el cuatree
 	struct cuaTree* ramaN = (cuaTree*)malloc(sizeof(struct cuaTree));
@@ -503,7 +518,7 @@ __device__ cuaTree* rellenaTree(universo* uni, cuaTree* raiz, int cuadrante, int
 	return ramaN;
 
 }
-__device__ void ramificaTree(cuaTree* raiz, universo* uni) {
+void ramificaTree(cuaTree* raiz, universo* uni) {
 	//VariablesDeApoyo
 	//printf("Nivel: %d	Path: %d\n", raiz[0].nivelTree, raiz[0].path);
 	raiz[0].tieneRamas = true;
@@ -542,7 +557,7 @@ __device__ void ramificaTree(cuaTree* raiz, universo* uni) {
 	for (int i = 0; i < nCuerposTotales; i++) {
 		numCuerpo = raiz[0].cuerpos[i];
 		cuerpoTree = uni[0].cuerpos[numCuerpo];
-		num = aQueCuadrante(cuerpoTree, raiz[0]); //device
+		num = aQueCuadrante(cuerpoTree, raiz[0]);
 
 		switch (num) {
 
@@ -569,10 +584,13 @@ __device__ void ramificaTree(cuaTree* raiz, universo* uni) {
 
 	}
 
+
+
+
 	//Rama 1
 	if (nCuerposRama1 > 0) {
 		//Si tiene cuerpos, se crea y rellena la rama. 
-		rama = rellenaTree(uni, raiz, 1, nCuerposRama1, cuerpos1, masaTotal1, midX, maxY, minX, midY); //device
+		rama = rellenaTree(uni, raiz, 1, nCuerposRama1, cuerpos1, masaTotal1, midX, maxY, minX, midY);
 		raiz[0].rama1 = rama;
 		//Si no es un nivel suficiente, se ramifica más
 		if (ramificarMas) {
@@ -639,33 +657,19 @@ __device__ void ramificaTree(cuaTree* raiz, universo* uni) {
 	free(cuerpos4);
 
 }
-__global__ void raizTree(universo* uni, cuaTree* raiz) { // << < 1, 1> >>
-	int* cuerpos = (int*)malloc(N * sizeof(int));
-	float masaTotal = 0.0;
-
-	for (int i = 0; i < N; i++) {
-		cuerpos[i] = i;
-		masaTotal += uni[0].cuerpos[i].masa;
+void cleanMatrizTree(universo* uni) {
+	//punTree
+	int nFilas = (int)pow(2, nNiveles) + 1e-9;
+	int nColumnas = (int)pow(2, nNiveles) + 1e-9;
+	for (int i = 0; i < nFilas; i++) {
+		for (int j = 0; j < nColumnas; j++) {
+			uni->punTreeMatriz[i][j] = NULL;
+			uni->punTreeMatrizGPU[i][j] = NULL;
+			uni->punCuerposGPU[i][j] = NULL;
+		}
 	}
-
-	raiz->path = 0;
-	raiz->cuadrante = 0;
-	raiz->nivelTree = 0;
-
-	raiz->nCuerpos = N;
-	raiz->cuerpos = cuerpos;
-
-	raiz->masaTotal = masaTotal;
-
-	raiz->maxX = MAXDIM;
-	raiz->maxY = MAXDIM;
-	raiz->minX = 0.0 - MAXDIM;
-	raiz->minY = 0.0 - MAXDIM;
-
-	ramificaTree(raiz, uni);
-
 }
-__device__ void liberaTree(cuaTree* raiz) {
+void liberaTree(cuaTree* raiz) {
 	free(raiz->cuerpos);
 	raiz->nCuerpos = 0;
 	if (raiz->rama1 != NULL) {//Este arbol tenia un hijo en rama 1. 
@@ -690,14 +694,27 @@ __device__ void liberaTree(cuaTree* raiz) {
 	}
 	raiz->tieneRamas = false;
 }
-__global__ void cleanMatrizTree(universo* d_uni) {
-	d_uni->punTreeMatriz[blockIdx.x][threadIdx.x] = NULL;
+
+
+void liberaDUni(universo* uni) {
+	int nFilas = pow(2, nNiveles);
+	for (int i = 0; i < nFilas; i++) {
+		for (int j = 0; j < nFilas; j++) {
+			if (uni->punTreeMatriz[i][j] != NULL) {
+				cudaFree(uni->punTreeMatrizGPU[i][j]);
+				cudaFree(uni->punCuerposGPU[i][j]);
+				uni->punTreeMatrizGPU[i][j] = NULL;
+				uni->punCuerposGPU[i][j] = NULL;
+			}
+		}
+	}
 }
 __device__ void calculoFuerzaCuerpoCuerpo(universo* uni, int idCuerpo1, int idCuerpo2) {
 	//Force iterate toma los ids de los cuerpos y los calcula los unos con los otros
 	cuerpo cuerpo1 = uni[0].cuerpos[idCuerpo1];
 	cuerpo cuerpo2 = uni[0].cuerpos[idCuerpo2];
-
+	universo* d_uni;
+	cudaMalloc(&d_uni, sizeof(universo));
 	float posX1 = cuerpo1.pos[0];
 	float posY1 = cuerpo1.pos[1];
 	float posX2 = cuerpo2.pos[0];
@@ -759,27 +776,83 @@ __device__ void calculoFuerzaCuerpoTree(universo* uni, int idCuerpo, cuaTree* ra
 	//Mete el nuevo cuerpo en uni
 }
 
+//HASTA AQUI ES REVISABLE SI HICIERA FALTA
 
-__global__ void preLiberaTree(cuaTree* d_raiz) {
-	liberaTree(d_raiz);
-}
-__global__ void crearPunTree(universo* d_uni) {
-	d_uni->punTreeMatriz = (cuaTree***)malloc(sizeof(cuaTree**) * SIZE);
-	for (int i = 0; i < SIZE; i++) {
-		d_uni->punTreeMatriz[i] = (cuaTree**)malloc(sizeof(cuaTree*) * SIZE);
+/*
+	Pasos:
+	1)Si es la primera vez, se ejecuta tal cual
+	2)Si es la segunda o posterior, se liberaTree la Raiz, se libera la matriz de punteros a Trees finales y se usa RaizTree de nuevo 
+	i.e: Siempre se trabaja sobre ramas nuevas
+	Razón: Si los códigos están escritos bajo la premisa de que siempre se está trabajando con ramas nuevas, son mucho más simples
+	Pros: Se gana en no comprobar si una rama existe o no
+	Contras: Se pierde en borrar y crear espacio para ramas.
+*/
+
+
+void rellenaRamaGPU(universo* uni, cuaTree** punTreeGPU) {
+	int nFilas = pow(2, nNiveles);
+	struct cuaTree* rama;
+	struct cuaTree* d_rama;
+	struct cuaTree copia;
+	int* d_cuerpos;
+	int valor;
+	for (int i = 0; i < nFilas; i++) {
+		for (int j = 0; j < nFilas; j++) {
+			rama = uni->punTreeMatriz[i][j];//copio el puntero en rama por comodidad
+			valor = i * nFilas + j;
+			if (rama != NULL) {
+				copia = rama[0]; //Copio el tree en Copia
+				cudaMalloc(&d_cuerpos, sizeof(int) * rama->nCuerpos); //hago espacio para la lista de cuerpos de la rama en la GPU y guardo el puntero en d_cuerpos
+				cudaMemcpy(d_cuerpos, rama->cuerpos, sizeof(int) * rama->nCuerpos, cudaMemcpyHostToDevice); //Relleno ese espacio
+				copia.cuerpos = d_cuerpos; //Modifico la copia
+				cudaMalloc(&d_rama, sizeof(cuaTree)); //hago espacio para un cuatree en la GPU y guardo el puntero en d_rama
+				cudaMemcpy(d_rama, &copia, sizeof(cuaTree), cudaMemcpyHostToDevice); //Relleno ese espacio con la copia que contiene le puntero de la gpu
+				uni->punCuerposGPU[i][j] = d_cuerpos; //Guardo el puntero de la gpu
+				uni->punTreeMatrizGPU[i][j] = d_rama; //Guardo el puntero del tree de la gpu
+
+				punTreeGPU[valor] = uni->punTreeMatrizGPU[i][j];
+
+			}
+			else {
+				punTreeGPU[valor] = NULL;
+			}
+		}
 	}
 }
-__global__ void forcesZero(universo* d_uni) { //Global << <1,1> >>
-	for (int i = 0; i < N; i++) {
-		d_uni->cuerpos[i].fuerzas[0] = 0;
-		d_uni->cuerpos[i].fuerzas[1] = 0;
-	}
+void actualizaTree(universo* uni, universo* d_uni, cuaTree* raiz, cuaTree** punTreeGPU, cuaTree** d_punTreeGPU) {
+	int nFilas = pow(2, nNiveles);
+	int nCasillas = nFilas * nFilas;
+	//Pasamos d_uni a Uni
+	cudaMemcpy(uni, d_uni, sizeof(universo), cudaMemcpyDeviceToHost);
+	//primero liberamos los trees que hay en la GPU
+	liberaDUni(uni);
+
+	//Limpiamos el Tree de la anterior iteracion
+	liberaTree(raiz);
+	cleanMatrizTree(uni);
+
+	//Rellenamos la raiz con el universo actual y la ramificamos
+	raizTreeGPU(uni, raiz);
+	ramificaTree(raiz, uni);
+
+	//Rellenamos los punteros de uni
+	rellenaRamaGPU(uni, punTreeGPU);
+	cudaMemcpy(d_punTreeGPU, punTreeGPU, sizeof(cuaTree*) * nCasillas, cudaMemcpyHostToDevice);
+
+	//Mandamos uni de vuelta a d_uni
+	cudaMemcpy(d_uni, uni, sizeof(universo), cudaMemcpyHostToDevice);
 }
-__global__ void forceIterateTree(universo* d_uni) {
-	//Comprobar que el cuaTree idFila, idColumna existe
+
+__global__ void forceIterateTree(universo* d_uni, cuaTree** d_punTreeGPU) {
+	//Obtener bloque y thread
 	int idFila = blockIdx.x;
 	int idColumna = threadIdx.x;
-	struct cuaTree* puntTree = d_uni->punTreeMatriz[idFila][idColumna];
+	int nFilas = (int)pow(2, nNiveles) + 1e-9;
+	int nColumnas = (int)pow(2, nNiveles) + 1e-9;
+	int valor = idFila * nColumnas + idColumna;
+
+	//Comprobar que el cuaTree idFila, idColumna existe
+	struct cuaTree* puntTree = d_punTreeGPU[valor];
 	struct cuaTree* puntTree2;
 	if (puntTree == NULL) {
 		//No hay cuerpos en el rango de ese tree
@@ -798,13 +871,12 @@ __global__ void forceIterateTree(universo* d_uni) {
 
 		//Calculo las fuerzas con el resto de Trees
 		//Numero de filas y columnas en la matriz de trees
-		int nFilas = (int)pow(2, nNiveles) + 1e-9;
-		int nColumnas = (int)pow(2, nNiveles) + 1e-9;
 		int idCuerpo = -1;
 		for (int i = 0; i < nFilas; i++) {
 			for (int j = 0; j < nColumnas; j++) {
 				//Cojo el tree de posicion i,j
-				puntTree2 = d_uni->punTreeMatriz[i][j];
+				valor = i * nColumnas + j;
+				puntTree2 = d_punTreeGPU[valor];
 				if (puntTree2 != NULL) {
 					//Si el tree i,j no es un null, tiene masatotal y centros de masa
 					if (i == idFila && j == idColumna) {
@@ -815,7 +887,6 @@ __global__ void forceIterateTree(universo* d_uni) {
 						for (int k = 0; k < nCuerpos; k++) {
 							idCuerpo = puntTree->cuerpos[k];
 							calculoFuerzaCuerpoTree(d_uni, idCuerpo, puntTree2);
-							
 							//En esencia, a cada cuerpo del tree (idFila, idColumna) se le hace la iteracion
 							//de fuerza con el tree(i,j)
 						}
@@ -826,7 +897,12 @@ __global__ void forceIterateTree(universo* d_uni) {
 	}
 
 }
-
+__global__ void forcesZero(universo* d_uni) { //Global << <1,1> >>
+	for (int i = 0; i < N; i++) {
+		d_uni->cuerpos[i].fuerzas[0] = 0;
+		d_uni->cuerpos[i].fuerzas[1] = 0;
+	}
+}
 __global__ void newAcel(universo* uni) {
 
 	//Obtener bloque y thread
@@ -846,12 +922,12 @@ __global__ void newPosition(universo* uni) {
 	int nBlock = blockIdx.x;
 	int nThread = threadIdx.x;
 	//Obtener Posicion y Velocidad actual de esta dimension
-	float pos_actual = uni[0].cuerpos[nBlock].pos[nThread];
-	float vel_actual = uni[0].cuerpos[nBlock].vel[nThread];
+	float pos_actual = uni->cuerpos[nBlock].pos[nThread];
+	float vel_actual = uni->cuerpos[nBlock].vel[nThread];
 
 	//Calcular la nueva Posición y meterla en el universo
 	float pos_nueva = pos_actual + vel_actual * TIMELAPSE;
-	uni[0].cuerpos[nBlock].pos[nThread] = pos_nueva;
+	uni->cuerpos[nBlock].pos[nThread] = pos_nueva;
 }
 __global__ void newSpeed(universo* uni) {
 
@@ -860,81 +936,79 @@ __global__ void newSpeed(universo* uni) {
 	int nThread = threadIdx.x;
 
 	//Obtener Velocidad y Aceleración actual de esta dimension
-	float vel_actual = uni[0].cuerpos[nBlock].vel[nThread];
-	float acel_actual = uni[0].cuerpos[nBlock].acel[nThread];
+	float vel_actual = uni->cuerpos[nBlock].vel[nThread];
+	float acel_actual = uni->cuerpos[nBlock].acel[nThread];
 
 	//Calcular la nueva Velocidad y meterla en el universo
 	float vel_nueva = vel_actual + acel_actual * TIMELAPSE;
-	uni[0].cuerpos[nBlock].vel[nThread] = vel_nueva;
+	uni->cuerpos[nBlock].vel[nThread] = vel_nueva;
 }
 
-void iterateUniverseTreeGPU(universo* uni, int nSegundos, bool print) {
-	int timeLeft = nSegundos; int countTree = 0; int nIteration = 0;
+void iterateUniverseTreeCPUGPU(universo* uni, int nSegundos, bool print) {
+	int timeLeft = nSegundos; int nIteration = 0; int countTree = 0;
 	int nIteracionesTotales = nSegundos / TIMELAPSE;
+	int nCasillas = SIZE * SIZE;
+	struct cuaTree** punTreeGPU = (cuaTree**)malloc(sizeof(cuaTree*) * nCasillas);
+	struct cuaTree** d_punTreeGPU; cudaMalloc(&d_punTreeGPU, sizeof(cuaTree*) * nCasillas);
+	struct cuaTree* raiz = (cuaTree*)malloc(sizeof(cuaTree));
+	raiz = new cuaTree;
+	raizTreeGPU(uni, raiz);
+	ramificaTree(raiz, uni);
+	rellenaRamaGPU(uni, punTreeGPU);
+	cudaMemcpy(d_punTreeGPU, punTreeGPU, sizeof(cuaTree*) * nCasillas, cudaMemcpyHostToDevice);
 	universo* d_uni; cudaMalloc(&d_uni, sizeof(universo));
 	cudaMemcpy(d_uni, uni, sizeof(universo), cudaMemcpyHostToDevice);
-	crearPunTree << <1, 1 >> > (d_uni);
-
-	struct cuaTree* d_raiz; cudaMalloc(&d_raiz, sizeof(cuaTree));
-	raizTree << <1, 1 >> > (d_uni, d_raiz);
-	cudaDeviceSynchronize();
-
 	while (timeLeft >= TIMELAPSE) {
 		if (print) {
 			cudaMemcpy(uni, d_uni, sizeof(universo), cudaMemcpyDeviceToHost);
 			writeData(uni, nIteration, nIteracionesTotales + 1);
 		}
 		if (countTree == CLEANTREEITERATION) {
-			cleanMatrizTree << <SIZE, SIZE >> > (d_uni);
-			preLiberaTree << <1, 1 >> > (d_raiz);
-			raizTree << <1, 1 >> > (d_uni, d_raiz);
+			actualizaTree(uni, d_uni, raiz, punTreeGPU, d_punTreeGPU);
 			countTree = 0;
 		}
 		forcesZero << <1, 1 >> > (d_uni);
-		forceIterateTree << <SIZE, SIZE >> > (d_uni);
+		forceIterateTree << <SIZE, SIZE >> > (d_uni, d_punTreeGPU);
 		newAcel << <N, 2 >> > (d_uni);
 		newPosition << <N, 2 >> > (d_uni);
 		newSpeed << <N, 2 >> > (d_uni);
-		timeLeft -= TIMELAPSE;nIteration++;countTree++;
+		timeLeft -= TIMELAPSE;
+		nIteration++;
+		countTree++;
 		cudaDeviceSynchronize();
 	}
+	actualizaTree(uni, d_uni, raiz, punTreeGPU, d_punTreeGPU);
 	if (print) {
 		cudaMemcpy(uni, d_uni, sizeof(universo), cudaMemcpyDeviceToHost);
 		writeData(uni, nIteration, nIteracionesTotales + 1);
 	}
-	cudaDeviceSynchronize();
 }
+
 
 int main() {
 
-	cudaThreadSetLimit(cudaLimitMallocHeapSize, 128 * 1024 * 1024);
 	clock_t tiempo_inicio, tiempo_final;
 	double segundos;
-	int tiempoIteracion = 36000; 
+	int tiempoIteracion = 36000;
 
 	struct universo* uni = (universo*)malloc(sizeof(universo));
 	uni = new universo;
 	crearUniversoAleatorio(uni); //Rellena uni
-	cleanMatrizTreeHost(uni);//Limpia la matriz de punteros a ramas finales de uni y limpia un tree
+	cleanMatrizTree(uni);//Limpia la matriz de punteros a ramas finales de uni
 	
-	//printCuerpos(uni, 0, true, true);
 	printf("Comienzo de la iteracion del universo\n");
 	printf("	Numero de cuerpos:		%d\n", N);
 	printf("	Segundos por iteracion:		%d\n", TIMELAPSE);
 	printf("	Tiempo a iterar:		%d\n", tiempoIteracion);
 	printf("	Numero de iteraciones:		%d\n", tiempoIteracion / TIMELAPSE);
 	
-	
+
 	tiempo_inicio = clock();
-	iterateUniverseTreeGPU(uni, tiempoIteracion, false);
+	iterateUniverseTreeCPUGPU(uni, tiempoIteracion, true);
 	tiempo_final = clock();
 
 	segundos = (double)(tiempo_final - tiempo_inicio) / CLOCKS_PER_SEC; /*según que estes midiendo el tiempo en segundos es demasiado grande*/
-
 	printf("\nTIEMPO TARDADO: %f\n", segundos);
-
-
-
-
+	
 	return 0;
 }
