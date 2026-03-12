@@ -1,23 +1,17 @@
 Overview
 
-This project implements different approaches to simulate the N-Body gravitational problem using both CPU and GPU (CUDA).
+This project implements different approaches to simulate the N-Body gravitational problem using both CPU and GPU (CUDA). It was developed as part of my Bachelor's Thesis on parallelizing irregular algorithms on GPU architectures.
 The goal of the project is to study how parallel computing on GPUs can improve performance and how irregular algorithms, such as spatial tree structures, behave compared to regular algorithms.
 
 Several versions of the simulation were implemented:
 
-A CPU version using the direct N² algorithm
+1. A CPU version using the direct N² algorithm
+2. A GPU CUDA implementation of the same algorithm
+3. A QuadTree spatial partition algorithm
+4. A GPU CUDA QuadTree spatial partition algorithm
+5. Hybrid CPU + GPU versions of the QuadTree simulation
+6. A Python visualization tool to animate the simulation results
 
-A GPU CUDA implementation of the same algorithm
-
-A QuadTree spatial partition algorithm
-
-A GPU CUDA QuadTree spatial partition algorithm
-
-Hybrid CPU + GPU versions of the QuadTree simulation
-
-A Python visualization tool to animate the simulation results
-
-This project was developed as part of my Bachelor's Thesis on parallelizing irregular algorithms on GPU architectures.
 
 The N-Body Problem
 
@@ -28,19 +22,12 @@ Each particle is influenced by every other particle using Newton’s law of grav
 F = G * (m1 * m2) / r²
 
 For every timestep the simulation calculates:
+-Gravitational forces
+-Acceleration
+-Velocity
+-New position
 
-Gravitational forces
-
-Acceleration
-
-Velocity
-
-New position
-
-The straightforward approach requires calculating all pairwise interactions, giving a complexity of:
-
-O(N²)
-
+The straightforward approach requires calculating all pairwise interactions, giving a complexity of O(N²)
 This becomes very expensive when the number of bodies grows, which makes the problem suitable for parallel computing with GPUs.
 
 Implementations
@@ -49,9 +36,7 @@ Implementations
 File:
 
 nCPU.cu
-
 This version runs entirely on the CPU and calculates the force between every pair of bodies.
-
 It serves as a baseline implementation to compare performance with the GPU versions.
 
 Characteristics:
