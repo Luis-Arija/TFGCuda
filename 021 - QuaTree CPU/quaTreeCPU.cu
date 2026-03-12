@@ -3,25 +3,25 @@
 #include <time.h>
 #include <Windows.h>
 
-#define N 100					//Número de Cuerpos en el universo
-#define TIMELAPSE 3600			//Número de segundos que pasan entre instantes
+#define N 100					//Nï¿½mero de Cuerpos en el universo
+#define TIMELAPSE 3600			//Nï¿½mero de segundos que pasan entre instantes
 #define G 6.67428/pow(10, 11)	//Constante G
-#define MAXDIM 15*pow(10, 8)	//Rango de posición en X e Y
+#define MAXDIM 15*pow(10, 8)	//Rango de posiciï¿½n en X e Y
 #define MAXSPEED 3*pow(10,3)	//Rango de velocidad en X e Y
-#define MAXMASS 6*pow(10,24)	//Masa máxima de un Cuerpo
+#define MAXMASS 6*pow(10,24)	//Masa mï¿½xima de un Cuerpo
 #define MINMASS 1*pow(10,23)	//Masa minima de un Cuerpo
-#define nNiveles 8				//Número de niveles del arbol. 
-#define SIZE pow(2,nNiveles)	//Número de filas y columnas de la matriz de ramas final
-#define CLEANTREEITERATION 1	//Número de iteraciones antes de actualizar el arbol
+#define nNiveles 8				//Nï¿½mero de niveles del arbol. 
+#define SIZE pow(2,nNiveles)	//Nï¿½mero de filas y columnas de la matriz de ramas final
+#define CLEANTREEITERATION 1	//Nï¿½mero de iteraciones antes de actualizar el arbol
 
 
 //STRUCTS
 struct cuerpo {
 	float pos[2];	//En metros, modificado mediante sumas y restas
 	float vel[2];	//En Metros/Segundo, modificado mediante sumas y restas
-	float masa;		//En KG, estático
-	float acel[2];	//En m/s^2, cada iteración es nuevo
-	float fuerzas[2]; //En N, cada iteración es nuevo.
+	float masa;		//En KG, estï¿½tico
+	float acel[2];	//En m/s^2, cada iteraciï¿½n es nuevo
+	float fuerzas[2]; //En N, cada iteraciï¿½n es nuevo.
 };
 
 struct cuaTree {
@@ -53,12 +53,12 @@ struct universo {
 	};
 
 
-//Si no uso punteros a los niveles más bajos, tendré que nadar a traves de las ramas en ambas direcciones. 
+//Si no uso punteros a los niveles mï¿½s bajos, tendrï¿½ que nadar a traves de las ramas en ambas direcciones. 
 //Ejemplo, un tree a la izquierda de un tree de cuadrante 1 es su primo. Para alcanzarle, tengo que ir al abuelo del original, escoger el hijo adecuado, 
-// y el hijo de ese hijo. Todo para un tree que está más cerca que su hermano del cuadrante 4
+// y el hijo de ese hijo. Todo para un tree que estï¿½ mï¿½s cerca que su hermano del cuadrante 4
 //Por ello, punteros. 
 //Problema: 
-//Solución: 
+//Soluciï¿½n: 
 
 //GENERADORES DE NUMEROS ALEATORIOS
 
@@ -170,7 +170,7 @@ void writeData(universo* uni, int iteracion, int nIteracionesTotales) {
 		fprintf(archivo, "%d;%d", nIteracionesTotales, N);
 	}
 	else {
-		// Abrir el archivo en modo adición ("a")
+		// Abrir el archivo en modo adiciï¿½n ("a")
 		archivo = fopen(nombreArchivo, "a");
 	}
 
@@ -517,7 +517,7 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 	//printf("Nivel: %d	Path: %d\n", raiz[0].nivelTree, raiz[0].path);
 	raiz[0].tieneRamas = true;
 	cuaTree* rama;
-	bool ramificarMas = (raiz[0].nivelTree + 1 < nNiveles);//Es el nivel que creo ahora el nivel más bajo?
+	bool ramificarMas = (raiz[0].nivelTree + 1 < nNiveles);//Es el nivel que creo ahora el nivel mï¿½s bajo?
 
 	float minX = raiz[0].minX;
 	float maxX = raiz[0].maxX;
@@ -586,7 +586,7 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 		//Si tiene cuerpos, se crea y rellena la rama. 
 		rama = rellenaTree(uni, raiz, 1, nCuerposRama1, cuerpos1, masaTotal1, midX, maxY, minX, midY);
 		raiz[0].rama1 = rama;
-		//Si no es un nivel suficiente, se ramifica más
+		//Si no es un nivel suficiente, se ramifica mï¿½s
 		if (ramificarMas) {
 			ramificaTree(rama, uni);
 		}
@@ -604,7 +604,7 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 		//Si tiene cuerpos, se crea y rellena la rama. 
 		rama = rellenaTree(uni, raiz, 2, nCuerposRama2, cuerpos2, masaTotal2, maxX, maxY, midX, midY);
 		raiz[0].rama2 = rama;
-		//Si no es un nivel suficiente, se ramifica más
+		//Si no es un nivel suficiente, se ramifica mï¿½s
 		if (ramificarMas) {
 			ramificaTree(rama, uni);
 		}
@@ -621,7 +621,7 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 		//Si tiene cuerpos, se crea y rellena la rama. 
 		rama = rellenaTree(uni, raiz, 3, nCuerposRama3, cuerpos3, masaTotal3, midX, midY, minX, minY);
 		raiz[0].rama3 = rama;
-		//Si no es un nivel suficiente, se ramifica más
+		//Si no es un nivel suficiente, se ramifica mï¿½s
 		if (ramificarMas) {
 			ramificaTree(rama, uni);
 		}
@@ -638,7 +638,7 @@ void ramificaTree(cuaTree* raiz, universo* uni) {
 		//Si tiene cuerpos, se crea y rellena la rama. 
 		rama = rellenaTree(uni, raiz, 4, nCuerposRama4, cuerpos4, masaTotal4, maxX, midY, midX, minY);
 		raiz[0].rama4 = rama;
-		//Si no es un nivel suficiente, se ramifica más
+		//Si no es un nivel suficiente, se ramifica mï¿½s
 		if (ramificarMas) {
 			ramificaTree(rama, uni);
 		}
@@ -927,7 +927,7 @@ int main() {
 	iterateUniverseTreeCPU(uni, tiempoIteracion, true);
 	tiempo_final = clock();
 
-	segundos = (double)(tiempo_final - tiempo_inicio) / CLOCKS_PER_SEC; /*según que estes midiendo el tiempo en segundos es demasiado grande*/
+	segundos = (double)(tiempo_final - tiempo_inicio) / CLOCKS_PER_SEC; /*segï¿½n que estes midiendo el tiempo en segundos es demasiado grande*/
 
 	printf("\nTIEMPO TARDADO: %f\n", segundos);
 
